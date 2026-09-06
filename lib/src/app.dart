@@ -6,6 +6,7 @@ import 'color_service.dart';
 import 'ddc_service.dart';
 import 'models.dart';
 import 'profiles_section.dart';
+import 'tones_section.dart';
 
 class LuxApp extends StatelessWidget {
   final LuxApiServer? api;
@@ -137,6 +138,18 @@ class _HomePageState extends State<HomePage> {
         content: Text('Color restaurado (tu night-light previo).')));
   }
 
+  /// Runs [action] showing errors in a snackbar. For fire-and-forget
+  /// child sections (tones) that manage their own refresh.
+  Future<void> _runGuarded(Future<void> Function() action) async {
+    try {
+      await action();
+    } on LuxException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -172,6 +185,19 @@ class _HomePageState extends State<HomePage> {
                   onApply: _applyProfile,
                   onRestore: _restoreColor,
                 ),
+                const SizedBox(height: 8),
+                if (_monitors != null && _monitors!.isNotEmpty)
+                  Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TonesSection(
+                        monitorId: _monitors!.first.id,
+                        busy: _applyingPreset,
+                        runGuarded: _runGuarded,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 if (_monitors != null)
                   for (final m in _monitors!)

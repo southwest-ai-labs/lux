@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -7,23 +5,31 @@ import 'package:flutter/foundation.dart';
 import 'ddc_service.dart';
 import 'models.dart';
 
-/// Software color-temperature control via `wlsunset`.
+/// Software color via hyprshade screen shaders (compositor-side).
 ///
-/// Taking over gamma kills the user's own wlsunset (e.g. geo night-light),
-/// so the previous command line is saved to `~/.config/lux/wlsunset.prev`
-/// and relaunched on [clearTemperature]/[shutdown]. Taking over twice keeps
-/// the FIRST saved command (first owner wins) so restore never loops.
+/// Chosen over wlsunset because this machine's wlr gamma path is broken
+/// ("gamma control of output DP-2 failed" even for the user's own geo
+/// wlsunset). Shaders bypass gamma entirely and are proven with captured
+/// frames (lux-read: blue 18.0 -> 11.5, R/B 1.015 -> 1.539).
+/// Shaders live in ~/.config/hypr/shaders/ as lux-NAME.glsl;
+/// [clearTemperature] runs `hyprshade off` (unfiltered output).
+/// The user's wlsunset is left alone (it fails silently, no conflict).
 class ColorService {
-  static const executable = 'wlsunset';
-  static Process? _active;
+  static const executable = 'hyprshade';
 
-  /// Args that hold ~[kelvin] constant. wlsunset requires high > low
-  /// (strict), so we pin low = K-1, high = K — a ±1K difference no eye
-  /// can see, stable day and night without needing geo coordinates.
-  static List<String> argsForTemp(int kelvin) =>
-      ['-t', '${kelvin - 1}', '-T', '$kelvin'];
+  static String shaderFor(String profileName) => 'lux-$profileName';
+  static List<String> onArgs(String profileName) =>
+      ['on', shaderFor(profileName)];
+  static List<String> get offArgs => ['off'];
 
-  static bool isValidTemp(int kelvin) => kelvin >= 1000 && kelvin <= 10000;
+  /// Nearest profile shader for an arbitrary kelvin request.
+  /// >=6000K is neutral: no shader (off).
+  static String shaderForKelvin(int kelvin) {
+    if (kelvin >= 6000) return 'off';
+    if (kelvin >= 5000) return shaderFor('code');
+    if (kelvin >= 4250) return shaderFor('video');
+    return shaderFor('read');
+  }
 
   static Future<bool> get isAvailable async {
     try {
@@ -34,31 +40,8 @@ class ColorService {
     }
   }
 
-  static Future<File> _stateFile() async {
-    final base = Platform.environment['XDG_CONFIG_HOME'] ??
-        '${Platform.environment['HOME']}/.config';
-    final dir = Directory('$base${Platform.pathSeparator}lux');
-    await dir.create(recursive: true);
-    return File('${dir.path}${Platform.pathSeparator}wlsunset.prev');
-  }
-
-  /// Command line (args only) of a wlsunset NOT owned by us, if any.
-  static Future<List<String>?> _otherWlsunsetArgs() async {
-    final r = await Process.run('pgrep', ['-a', '-x', executable]);
-    if (r.exitCode != 0) return null;
-    final ownPid = _active?.pid;
-    for (final line in '${r.stdout}'.split('\n')) {
-      final parts = line.trim().split(RegExp(r'\s+'));
-      if (parts.length < 2) continue;
-      if (ownPid != null && int.tryParse(parts[0]) == ownPid) continue;
-      return parts.sublist(2);
-    }
-    return null;
-  }
-
   /// Apply a named profile: hardware brightness (best-effort, needs i2c)
-  /// + software temperature (works now). Never throws the aggregate —
-  /// failures come back per part in the result map.
+  /// + hyprshade color (works now). Failures come back per part.
   static Future<Map<String, dynamic>> applyProfile(String name) async {
     final profile = ColorProfiles.byName(name);
     if (profile == null) {
@@ -69,8 +52,7 @@ class ColorService {
     Map<int, String?> perMonitor = {};
     try {
       perMonitor = await DdcService.setAllBrightness(profile.brightness);
-      final failed =
-          perMonitor.values.where((e) => e != null).length;
+      final failed = perMonitor.values.where((e) => e != null).length;
       if (perMonitor.isEmpty) {
         brightnessError = 'No DDC/CI monitors reachable (needs i2c).';
       } else if (failed == perMonitor.length) {
@@ -81,7 +63,7 @@ class ColorService {
     }
     String? temperatureError;
     try {
-      await setTemperature(profile.temperature);
+      await setShader(profile.name);
     } on LuxException catch (e) {
       temperatureError = e.message;
     }
@@ -95,79 +77,52 @@ class ColorService {
       },
       'temperature': {
         'target': profile.temperature,
+        'shader': shaderFor(profile.name),
         'error': temperatureError,
       },
     };
   }
 
-  /// Hold [kelvin] via wlsunset, taking over gamma. Restorable.
-  static Future<void> setTemperature(int kelvin) async {
-    if (!isValidTemp(kelvin)) {
-      throw const LuxException('Temperature must be 1000-10000 K.');
-    }
-    if (!await isAvailable) {
-      throw const LuxException(
-          'wlsunset not found in PATH (NixOS: pkgs.wlsunset).');
-    }
-    final other = await _otherWlsunsetArgs();
-    if (other != null) {
-      final state = await _stateFile();
-      if (!await state.exists()) {
-        await state.writeAsString(jsonEncode({'args': other}));
-      }
-    }
-    await _killAll();
-    try {
-      _active = await Process.start(executable, argsForTemp(kelvin));
-    } on ProcessException catch (e) {
-      throw LuxException('Could not start wlsunset: ${e.message}');
-    }
-    _active!.stdout.listen((_) {});
-    _active!.stderr.listen((_) {});
-    unawaited(_active!.exitCode);
-    debugPrint('lux: holding $kelvin K via wlsunset (pid ${_active!.pid})');
+  /// Activate a profile shader. Throws [LuxException] with hyprshade's
+  /// stderr when it fails (shader missing, compositor unreachable).
+  static Future<void> setShader(String profileName) async {
+    await _runHyprshade(onArgs(profileName));
+    debugPrint('lux: shader ${shaderFor(profileName)} on');
   }
 
-  /// Release gamma: kill ours and relaunch whatever was running before.
+  /// Back to unfiltered output. Never throws (shutdown path).
   static Future<void> clearTemperature() async {
-    await _killAll();
-    final state = await _stateFile();
-    if (await state.exists()) {
-      try {
-        final saved =
-            jsonDecode(await state.readAsString()) as Map<String, dynamic>;
-        final args = (saved['args'] as List).cast<String>();
-        final restored = await Process.start(executable, args);
-        restored.stdout.listen((_) {});
-        restored.stderr.listen((_) {});
-        unawaited(restored.exitCode);
-        debugPrint('lux: restored previous wlsunset ${args.join(' ')}');
-      } catch (e) {
-        debugPrint('lux: restore failed: $e');
-      } finally {
-        try {
-          await state.delete();
-        } catch (_) {}
-      }
-    }
-  }
-
-  /// App shutdown: same as clear, never throws.
-  static Future<void> shutdown() async {
     try {
-      await clearTemperature();
+      await _runHyprshade(offArgs);
     } catch (e) {
-      debugPrint('lux: shutdown restore failed: $e');
+      debugPrint('lux: clear failed: $e');
     }
   }
 
-  static Future<void> _killAll() async {
-    _active?.kill();
-    _active = null;
+  static Future<void> shutdown() async => clearTemperature();
+
+  static Future<String?> currentShader() async {
     try {
-      await Process.run('pkill', ['-x', executable]);
+      final r = await Process.run(executable, ['current']);
+      if (r.exitCode != 0) return null;
+      final out = '${r.stdout}'.trim();
+      return out.isEmpty ? null : out;
     } on ProcessException {
-      // pkill missing or nothing to kill — fine.
+      return null;
+    }
+  }
+
+  static Future<void> _runHyprshade(List<String> args) async {
+    ProcessResult r;
+    try {
+      r = await Process.run(executable, args);
+    } on ProcessException catch (e) {
+      throw LuxException(
+          'hyprshade not found in PATH (${e.message}). NixOS: nix profile install nixpkgs#hyprshade.');
+    }
+    if (r.exitCode != 0) {
+      throw LuxException('hyprshade ${args.join(' ')} failed: '
+          '${'${r.stderr}'.trim()}');
     }
   }
 }

@@ -56,16 +56,26 @@ curl -s -X PUT http://127.0.0.1:19847/v1/monitors/1 \
 | 0x10 | Brightness | 0-100 |
 | 0x12 | Contrast | 0-100 |
 
+## Hardware tones (panel presets, verified on this AOC)
+
+- `GET /v1/tones`, `POST /v1/tones/srgb|cool75|cool93`, `GET /v1/color/1`
+  (preset + RGB gains), `PUT /v1/monitors/1 {"colorPreset": 6}`,
+  `{"redGain": 55}` (auto-switches to User1)
+- CLI: `luxctl tone frio75`, `luxctl gains 1`, `luxctl gains 1 55 50 50`
+- ONLY 0x14 values 5/6/8/11 are ever sent (capabilities allowlist).
+  0x60/0x04/0x05/0x08 are rejected by construction — never touch them.
+
 ## Profiles (display + color)
 
 - `GET /v1/profiles`, `POST /v1/profiles/gaming|code|video|read`,
-  `DELETE /v1/temperature` (restore previous night-light)
+  `DELETE /v1/temperature` (shader off)
 - CLI: `luxctl profile leer`, `luxctl temp 4500`, `luxctl temp off`
-- Temperature works NOW (wlsunset takeover, previous cmdline restored on
-  clear); brightness needs i2c. Report both parts from the response; never
+- Color backend is hyprshade (`~/.config/hypr/shaders/lux-*.glsl`), NOT
+  wlsunset: this machine's wlr gamma path is broken ("gamma control of
+  output DP-2 failed" even for the user's own geo wlsunset), while shaders
+  are proven with captured frames (lux-read: blue 18.0 -> 11.5).
+- Brightness still needs i2c. Report both parts from the response; never
   claim brightness applied when `brightness.error` is set.
-- Taking over gamma kills the user's own wlsunset (first saved cmdline wins,
-  restored on clear/quit). Mention it when a profile changes their night mode.
 
 ## Rules
 

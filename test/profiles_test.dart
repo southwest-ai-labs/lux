@@ -39,15 +39,20 @@ void main() {
   });
 
   group('ColorService helpers (pure)', () {
-    test('argsForTemp pins both ends (K-1/K, wlsunset needs high>low)', () {
-      expect(ColorService.argsForTemp(4500), ['-t', '4499', '-T', '4500']);
+    test('shaderFor maps profiles to lux shaders', () {
+      expect(ColorService.shaderFor('read'), 'lux-read');
+      expect(ColorService.onArgs('video'), ['on', 'lux-video']);
+      expect(ColorService.offArgs, ['off']);
     });
 
-    test('isValidTemp boundaries', () {
-      expect(ColorService.isValidTemp(999), isFalse);
-      expect(ColorService.isValidTemp(1000), isTrue);
-      expect(ColorService.isValidTemp(10000), isTrue);
-      expect(ColorService.isValidTemp(10001), isFalse);
+    test('shaderForKelvin picks nearest (>=6000 = off)', () {
+      expect(ColorService.shaderForKelvin(6500), 'off');
+      expect(ColorService.shaderForKelvin(6000), 'off');
+      expect(ColorService.shaderForKelvin(5500), 'lux-code');
+      expect(ColorService.shaderForKelvin(5000), 'lux-code');
+      expect(ColorService.shaderForKelvin(4500), 'lux-video');
+      expect(ColorService.shaderForKelvin(4250), 'lux-video');
+      expect(ColorService.shaderForKelvin(4000), 'lux-read');
     });
   });
 }

@@ -50,6 +50,10 @@ class LuxTray with TrayListener {
         MenuItem(key: 'profile_code', label: 'Perfil: Programar'),
         MenuItem(key: 'profile_video', label: 'Perfil: Videos'),
         MenuItem(key: 'profile_read', label: 'Perfil: Leer'),
+        MenuItem.separator(),
+        MenuItem(key: 'tone_srgb', label: 'Tono: sRGB 6500K'),
+        MenuItem(key: 'tone_cool75', label: 'Tono: Frío 7500K'),
+        MenuItem(key: 'tone_cool93', label: 'Tono: Frío 9300K'),
         MenuItem(key: 'color_restore', label: 'Restaurar color'),
         MenuItem.separator(),
         MenuItem(
@@ -81,6 +85,20 @@ class LuxTray with TrayListener {
         await ColorService.applyProfile(key.substring('profile_'.length));
       } on LuxException catch (e) {
         debugPrint('lux: profile failed: $e');
+      }
+      await onChanged?.call();
+      return;
+    }
+    if (key.startsWith('tone_')) {
+      try {
+        final tone = HwTones.byName(key.substring('tone_'.length));
+        if (tone == null) throw const LuxException('Unknown tone.');
+        final monitors = await DdcService.detect(withLevels: false);
+        for (final m in monitors) {
+          await DdcService.setColorPreset(m.id, tone.preset14);
+        }
+      } on LuxException catch (e) {
+        debugPrint('lux: tone failed: $e');
       }
       await onChanged?.call();
       return;

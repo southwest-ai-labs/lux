@@ -150,3 +150,66 @@ abstract final class ColorProfiles {
     return all.firstWhere((p) => p.name == key);
   }
 }
+
+/// Hardware color tone from the panel's own VCP 0x14 presets
+/// (verified on AOC 24G42HE/Q27G4D firmware: 6500/7500/9300/User1).
+/// The panel cannot go below 6500K in hardware — warmth comes from
+/// hyprshade shaders (see ColorProfiles). Cool tones are best in
+/// hardware: zero overhead, works fullscreen/in games.
+class HwTone {
+  final String name;
+  final String label;
+  final String description;
+  final int preset14;
+
+  const HwTone({
+    required this.name,
+    required this.label,
+    required this.description,
+    required this.preset14,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'label': label,
+        'description': description,
+        'preset14': '0x${preset14.toRadixString(16).toUpperCase().padLeft(2, '0')}',
+      };
+}
+
+abstract final class HwTones {
+  static const srgb = HwTone(
+    name: 'srgb',
+    label: 'sRGB 6500K',
+    description: 'Neutro de referencia (lo más cercano a sRGB en este panel).',
+    preset14: 0x05,
+  );
+  static const cool75 = HwTone(
+    name: 'cool75',
+    label: 'Frío 7500K',
+    description: 'Blancos más fríos, más contraste percibido.',
+    preset14: 0x06,
+  );
+  static const cool93 = HwTone(
+    name: 'cool93',
+    label: 'Frío 9300K',
+    description: 'Máximo frío del panel. Solo gusto.',
+    preset14: 0x08,
+  );
+
+  static const all = [srgb, cool75, cool93];
+
+  static const _aliases = {
+    'srgb': 'srgb', '6500': 'srgb', 'neutro': 'srgb',
+    'cool75': 'cool75', '7500': 'cool75', 'frio75': 'cool75',
+    'cool93': 'cool93', '9300': 'cool93', 'frio93': 'cool93',
+  };
+
+  static String get validNames => all.map((p) => p.name).join(', ');
+
+  static HwTone? byName(String name) {
+    final key = _aliases[name.toLowerCase().trim()];
+    if (key == null) return null;
+    return all.firstWhere((p) => p.name == key);
+  }
+}

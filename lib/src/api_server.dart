@@ -92,7 +92,7 @@ class LuxApiServer {
       final seg = req.uri.pathSegments;
       if (seg.length >= 2 && seg[0] == 'v1' && seg[1] == 'health') {
         return _ok(req, {
-          'version': '0.1.1',
+          'version': '0.2.0',
           'ddcAvailable': await DdcService.isAvailable,
         });
       }
@@ -119,12 +119,32 @@ class LuxApiServer {
             final body = await _jsonBody(req);
             final b = (body['brightness'] as num?)?.toInt();
             final c = (body['contrast'] as num?)?.toInt();
-            if (b == null && c == null) {
+            final preset = (body['colorPreset'] as num?)?.toInt();
+            final r = (body['redGain'] as num?)?.toInt();
+            final g = (body['greenGain'] as num?)?.toInt();
+            final bl = (body['blueGain'] as num?)?.toInt();
+            if (b == null &&
+                c == null &&
+                preset == null &&
+                r == null &&
+                g == null &&
+                bl == null) {
               return _err(req, 400,
-                  'Body needs at least one of: brightness (0-100), contrast (0-100).');
+                  'Body needs at least one of: brightness, contrast (0-100), '
+                  'colorPreset (5/6/8/11), redGain/greenGain/blueGain (0-100).');
             }
             if (b != null) await DdcService.setBrightness(id, b);
             if (c != null) await DdcService.setContrast(id, c);
+            if (preset != null) await DdcService.setColorPreset(id, preset);
+            if (r != null) {
+              await DdcService.setUserGain(id, Vcp.redGain, r);
+            }
+            if (g != null) {
+              await DdcService.setUserGain(id, Vcp.greenGain, g);
+            }
+            if (bl != null) {
+              await DdcService.setUserGain(id, Vcp.blueGain, bl);
+            }
             final m = await _find(id);
             return _ok(req, m.toJson());
           }
@@ -150,6 +170,49 @@ class LuxApiServer {
           req.method == 'GET') {
         return _ok(
             req, ColorProfiles.all.map((p) => p.toJson()).toList());
+      }
+      if (seg.length == 2 &&
+          seg[0] == 'v1' &&
+          seg[1] == 'tones' &&
+          req.method == 'GET') {
+        return _ok(req, HwTones.all.map((t) => t.toJson()).toList());
+      }
+      if (seg.length == 3 &&
+          seg[0] == 'v1' &&
+          seg[1] == 'tones' &&
+          req.method == 'POST') {
+        final tone = HwTones.byName(seg[2].toLowerCase());
+        if (tone == null) {
+          return _err(req, 400,
+              'Unknown tone. Valid: ${HwTones.validNames}.');
+        }
+        final monitors = await DdcService.detect(withLevels: false);
+        final perMonitor = <String, String>{};
+        for (final m in monitors) {
+          try {
+            await DdcService.setColorPreset(m.id, tone.preset14);
+            perMonitor['${m.id}'] = 'ok';
+          } on LuxException catch (e) {
+            perMonitor['${m.id}'] = 'error: ${e.message}';
+          }
+        }
+        return _ok(req, {'tone': tone.name, 'perMonitor': perMonitor});
+      }
+      if (seg.length == 3 &&
+          seg[0] == 'v1' &&
+          seg[1] == 'color' &&
+          req.method == 'GET') {
+        final id = int.tryParse(seg[2]);
+        if (id == null) return _err(req, 400, 'Invalid monitor id.');
+        final preset = await DdcService.getColorPreset(id);
+        final gains = await DdcService.getRgbGains(id);
+        return _ok(req, {
+          'id': id,
+          'colorPreset': '0x${preset.toRadixString(16).toUpperCase().padLeft(2, '0')}',
+          'redGain': gains.r,
+          'greenGain': gains.g,
+          'blueGain': gains.b,
+        });
       }
       if (seg.length == 3 &&
           seg[0] == 'v1' &&

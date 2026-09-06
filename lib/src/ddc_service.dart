@@ -192,4 +192,62 @@ class DdcService {
 
   static String _hexNoPrefix(int code) =>
       code.toRadixString(16).toUpperCase().padLeft(2, '0');
+
+  /// Hardware color presets (VCP 0x14). ONLY values reported by
+  /// `capabilities` are accepted — never invent codes (0x60 input source
+  /// and 0x04/0x05/0x08 resets are rejected even if passed).
+  static const colorPresetsAllowed = {0x05, 0x06, 0x08, 0x0B};
+  static const userPreset = 0x0B;
+
+  static const rgbChannels = {0x16, 0x18, 0x1A};
+
+  static Future<void> setColorPreset(int id, int value) async {
+    if (!colorPresetsAllowed.contains(value)) {
+      throw LuxException(
+        'Preset ${Vcp.hex(value)} not offered by this panel. '
+        'Allowed: ${colorPresetsAllowed.map(Vcp.hex).join(', ')}.',
+      );
+    }
+    await _run(
+        ['--display', '$id', 'setvcp', _hexNoPrefix(0x14), '$value']);
+  }
+
+  /// Parse brief non-continuous read, e.g. "VCP 14 CNC x00 x0b x00 x05"
+  /// (current value = last hex token).
+  static int parseColorPresetBrief(String out) {
+    final m = RegExp(r'x([0-9a-fA-F]+)\s*$').firstMatch(out.trim());
+    if (m == null) {
+      throw LuxException(
+          'Could not read color preset. Raw: ${out.trim()}');
+    }
+    return int.parse(m.group(1)!, radix: 16);
+  }
+
+  static Future<int> getColorPreset(int id) async {
+    final out = await _run(
+        ['--brief', '--display', '$id', 'getvcp', _hexNoPrefix(0x14)]);
+    return parseColorPresetBrief(out);
+  }
+
+  /// Set one RGB gain. Panels (verified AOC) only honor gains in User
+  /// preset, so this switches to User1 (0x0B) first — explicit by design.
+  static Future<void> setUserGain(int id, int channel, int value) async {
+    if (!rgbChannels.contains(channel)) {
+      throw LuxException(
+        'Bad gain channel ${Vcp.hex(channel)}. Use 0x16/0x18/0x1A.',
+      );
+    }
+    await setColorPreset(id, userPreset);
+    await _setLevel(id, channel, value);
+  }
+
+  static Future<({int r, int g, int b})> getRgbGains(int id) async {
+    Future<int> read(int channel) =>
+        getLevel(id, channel).then((v) => v.current);
+    return (
+      r: await read(Vcp.redGain),
+      g: await read(Vcp.greenGain),
+      b: await read(Vcp.blueGain),
+    );
+  }
 }
