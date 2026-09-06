@@ -63,4 +63,74 @@ test/                    parser + table unit tests (no hardware needed)
 
 ## Status
 
-See `features.json`. v0.4.0: agent API removed (simpler app, personal use).
+See `features.json`. v0.4.1: personal app (agent API removed) + real
+desktop transparency.
+
+## Monitor compatibility
+
+Lux talks DDC/CI (VESA MCCS, standard since 1998, same cable as video).
+Rule of thumb: **any external monitor (DP/HDMI/DVI) with DDC/CI enabled
+in its OSD works for brightness**. Check yours in 10 seconds:
+
+```bash
+luxctl doctor     # ddcutil + i2c + detection in one go
+```
+
+### Verified
+
+| Monitor | Link | Brightness | Contrast | Presets 0x14 | RGB gains |
+|---|---|---|---|---|---|
+| AOC 24G42HE (DP, 200Hz) | DDC `AOC:24G42HE` | 0x10 OK | 0x12 OK | 6500/7500/9300/User1 OK | OK via User1 |
+
+### Expected to work (same standard, same VCP codes)
+
+Dell (P/U series), LG UltraGear/UltraFine external, Samsung Odyssey/
+Smart Monitor, BenQ ZOWIE/PD, ASUS TUF/ProArt, MSI, Gigabyte, Philips,
+ViewSonic, Acer — any external panel advertising DDC/CI or controllable
+by DisplayBuddy (Windows) / MonitorControl (macOS) / ddcutil (Linux).
+Those tools speak the exact same VCP codes Lux uses.
+
+### Feature matrix (varies per panel — always read `capabilities` first)
+
+| Feature | Code | Coverage |
+|---|---|---|
+| Brightness | 0x10 | near-universal on externals |
+| Contrast | 0x12 | very common, not guaranteed |
+| Color presets | 0x14 | values are panel-specific (this AOC: 5/6/8/11) |
+| RGB gains | 0x16/0x18/0x1A | common on gaming/pro panels; often need User preset |
+| Warmth <6500K in HW | — | does NOT exist on most panels → Lux uses shaders |
+
+### NOT supported
+
+- Laptop internal panels (backlight is ACPI/WMI, not DDC/CI).
+- Monitors with DDC/CI disabled in the OSD (enable it first).
+- Some USB-C portable monitors without a DDC channel.
+- Apple Studio Display / Pro Display XDR (proprietary control).
+
+### Report your panel
+
+Paste `ddcutil capabilities` output in an issue: brand, model, link,
+and which of brightness/contrast/presets/gains responded. The allowlist
+in `DdcService` grows from real reports, never from guesses.
+
+## Builds per OS
+
+| OS | Status | How |
+|---|---|---|
+| Linux (x64) | Built here (`~/.local/share/lux`) | nix-shell recipe in this README |
+| Windows (.exe) | NOT built here — needs a Windows machine (MSVC) | `flutter build windows --release` on Windows; runner in `windows/` |
+| macOS (.dmg) | NOT built here — needs a Mac (Xcode) | `flutter build macos --release` on a Mac; runner in `macos/` |
+
+Cross-compiling Flutter desktop from Linux is unsupported, so no honest
+.exe/.dmg can come out of this machine. Portability notes:
+
+- UI/tray/window code is already cross-platform (`tray_manager`,
+  `window_manager` support all three).
+- The DDC layer shells to `ddcutil` (Linux-only). Windows/macOS need a
+  native backend each: Windows → Physical Monitor API (like Monitorian /
+  ClickMonitorDDC); macOS → `ddcctl` for external monitors (internal
+  panels use IOKit, a different API). `DdcService` is the single seam:
+  implement per-OS runners behind it; VCP codes stay identical.
+- Color profiles use hyprshade (Hyprland-only). Other compositors/DEs
+  need their own filter path (GNOME Night Light, Windows Night light API,
+  macOS Night Shift) — same seam, same profile table.
