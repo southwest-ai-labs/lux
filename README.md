@@ -1,5 +1,7 @@
 # Lux — DDC/CI monitor brightness for Linux
 
+> Copyright 2026 Southwest AI Labs — Apache-2.0 (see `LICENSE`).
+
 Flutter Linux app in the system tray. Controls REAL panel backlight via
 DDC/CI (VESA MCCS over I2C) — unlike night-light filters, which only shift
 colors and never lower the backlight.
