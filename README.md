@@ -74,5 +74,7 @@ v0.1.0 — INSTALLED 2026-09-06 (`~/.local/bin/lux`, `~/.local/bin/luxctl`,
 `~/.local/share/applications/lux.desktop`). Smoke-tested: window maps in
 Hyprland, API enforces token, errors guide to the NixOS i2c fix.
 Hardware dimming pending: `hardware.i2c.enable = true` + `i2c` group.
-Next: per-monitor saved profiles, scheduler (auto-night), gamma fallback
-(hyprsunset) for panels without DDC/CI.
+v0.2.0 — color profiles (Jugar/Programar/Videos/Leer): software temperature
+via wlsunset works NOW (previous night-light auto-restored); hardware
+brightness joins automatically once i2c is enabled.
+Next: per-monitor saved profiles, scheduler (auto-night).

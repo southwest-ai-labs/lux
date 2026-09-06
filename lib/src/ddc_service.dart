@@ -165,24 +165,29 @@ class DdcService {
     await _run(['--display', '$id', 'setvcp', _hexNoPrefix(vcp), '$v']);
   }
 
-  /// Apply a named preset ([LuxPresets]) to every detected monitor.
-  static Future<Map<int, String?>> applyPreset(String name) async {
-    if (!LuxPresets.contains(name)) {
-      throw LuxException(
-          'Unknown preset "$name". Valid: ${LuxPresets.values.keys.join(', ')}');
-    }
-    final target = LuxPresets.valueOf(name);
+  /// Set the same brightness on every detected monitor.
+  /// Returns per-monitor errors (null = ok). Empty map = none detected.
+  static Future<Map<int, String?>> setAllBrightness(int value) async {
     final monitors = await detect(withLevels: false);
     final results = <int, String?>{};
     for (final m in monitors) {
       try {
-        await setBrightness(m.id, target);
+        await setBrightness(m.id, value);
         results[m.id] = null;
       } on LuxException catch (e) {
         results[m.id] = e.message;
       }
     }
     return results;
+  }
+
+  /// Apply a named preset ([LuxPresets]) to every detected monitor.
+  static Future<Map<int, String?>> applyPreset(String name) async {
+    if (!LuxPresets.contains(name)) {
+      throw LuxException(
+          'Unknown preset "$name". Valid: ${LuxPresets.values.keys.join(', ')}');
+    }
+    return setAllBrightness(LuxPresets.valueOf(name));
   }
 
   static String _hexNoPrefix(int code) =>

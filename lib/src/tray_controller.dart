@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:tray_manager/tray_manager.dart';
 
+import 'color_service.dart';
 import 'ddc_service.dart';
 import 'models.dart';
 
@@ -8,6 +9,7 @@ import 'models.dart';
 /// secondary (shown on demand, hidden on close).
 class LuxTray with TrayListener {
   final Future<void> Function() onToggleWindow;
+  final Future<void> Function() onShowWindow;
   final Future<void> Function() onQuit;
   final Future<void> Function()? onChanged;
 
@@ -15,6 +17,7 @@ class LuxTray with TrayListener {
 
   LuxTray({
     required this.onToggleWindow,
+    required this.onShowWindow,
     required this.onQuit,
     this.onChanged,
   });
@@ -43,6 +46,12 @@ class LuxTray with TrayListener {
         MenuItem(key: 'preset_reading', label: 'Reading (35%)'),
         MenuItem(key: 'preset_day', label: 'Day (80%)'),
         MenuItem.separator(),
+        MenuItem(key: 'profile_gaming', label: 'Perfil: Jugar'),
+        MenuItem(key: 'profile_code', label: 'Perfil: Programar'),
+        MenuItem(key: 'profile_video', label: 'Perfil: Videos'),
+        MenuItem(key: 'profile_read', label: 'Perfil: Leer'),
+        MenuItem(key: 'color_restore', label: 'Restaurar color'),
+        MenuItem.separator(),
         MenuItem(
           key: 'refresh',
           label: status ?? 'Re-read monitors',
@@ -58,11 +67,24 @@ class LuxTray with TrayListener {
 
   @override
   void onTrayIconMouseDown() {
-    onToggleWindow();
+    // Single left-click = open the window on top. (Right-click opens the
+    // native context menu via the tray host; double-click just toggled
+    // show/hide which looked broken.)
+    onShowWindow();
   }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) async {
+    final key = menuItem.key ?? '';
+    if (key.startsWith('profile_')) {
+      try {
+        await ColorService.applyProfile(key.substring('profile_'.length));
+      } on LuxException catch (e) {
+        debugPrint('lux: profile failed: $e');
+      }
+      await onChanged?.call();
+      return;
+    }
     switch (menuItem.key) {
       case 'toggle':
         await onToggleWindow();
@@ -76,6 +98,9 @@ class LuxTray with TrayListener {
         } on LuxException catch (e) {
           debugPrint('lux: preset failed: $e');
         }
+        await onChanged?.call();
+      case 'color_restore':
+        await ColorService.clearTemperature();
         await onChanged?.call();
       case 'refresh':
         await onChanged?.call();

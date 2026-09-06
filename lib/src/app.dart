@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api_server.dart';
+import 'color_service.dart';
 import 'ddc_service.dart';
 import 'models.dart';
+import 'profiles_section.dart';
 
 class LuxApp extends StatelessWidget {
   final LuxApiServer? api;
@@ -44,6 +46,7 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   bool _loading = true;
   bool _applyingPreset = false;
+  String? _activeProfile;
 
   @override
   void initState() {
@@ -67,7 +70,12 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       setState(() => _error = e.message);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _applyingPreset = false;
+        });
+      }
     }
   }
 
@@ -90,6 +98,43 @@ class _HomePageState extends State<HomePage> {
           .showSnackBar(SnackBar(content: Text(e.message)));
       setState(() => _applyingPreset = false);
     }
+  }
+
+  Future<void> _applyProfile(String name) async {
+    setState(() {
+      _applyingPreset = true;
+      _activeProfile = null;
+    });
+    try {
+      final res = await ColorService.applyProfile(name);
+      if (!mounted) return;
+      final bErr =
+          (res['brightness'] as Map)['error'] as String?;
+      final tErr =
+          (res['temperature'] as Map)['error'] as String?;
+      final parts = <String>[];
+      if (bErr != null) parts.add('brillo no aplicado ($bErr)');
+      if (tErr != null) parts.add('color no aplicado ($tErr)');
+      setState(() => _activeProfile = name);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(parts.isEmpty
+            ? 'Perfil $name aplicado (brillo + color).'
+            : 'Perfil $name parcial: ${parts.join(' · ')}'),
+      ));
+      await _reload();
+    } on LuxException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  }
+
+  Future<void> _restoreColor() async {
+    await ColorService.clearTemperature();
+    if (!mounted) return;
+    setState(() => _activeProfile = null);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Color restaurado (tu night-light previo).')));
   }
 
   @override
@@ -119,6 +164,13 @@ class _HomePageState extends State<HomePage> {
                 _PresetRow(
                   busy: _applyingPreset,
                   onPreset: _applyPreset,
+                ),
+                const SizedBox(height: 8),
+                ProfilesSection(
+                  active: _activeProfile,
+                  busy: _applyingPreset,
+                  onApply: _applyProfile,
+                  onRestore: _restoreColor,
                 ),
                 const SizedBox(height: 8),
                 if (_monitors != null)

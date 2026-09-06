@@ -92,6 +92,57 @@ cmd_token() {
   [ -f "$f" ] && { echo "token file: $f"; [ "${1:-}" = "--show" ] && cat "$f"; } || echo "no token yet (start the Lux app once)"
 }
 
+# shellcheck disable=SC2086
+_lux_temp_set() { # _lux_temp_set <kelvin> — hold temp via wlsunset, save prev
+  k="$1"
+  command -v wlsunset >/dev/null || { echo "temperature: skipped (wlsunset missing)" >&2; return 0; }
+  state="${XDG_CONFIG_HOME:-$HOME/.config}/lux/wlsunset.prev"
+  mkdir -p "${state%/*}"
+  if [ ! -f "$state" ]; then
+    prev=$(pgrep -a -x wlsunset 2>/dev/null | head -n1 | awk '{$1=$2=""; print $0}' | xargs || true)
+    [ -n "$prev" ] && printf '%s' "$prev" > "$state" || true
+  fi
+  pkill -x wlsunset 2>/dev/null || true
+  # wlsunset needs high>low (strict): pin low=K-1, high=K (±1K invisible)
+  nohup wlsunset -t "$((k-1))" -T "$k" >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+  echo "temperature -> ${k}K (wlsunset pid $!)"
+}
+
+_lux_temp_restore() {
+  pkill -x wlsunset 2>/dev/null || true
+  state="${XDG_CONFIG_HOME:-$HOME/.config}/lux/wlsunset.prev"
+  if [ -f "$state" ]; then
+    # shellcheck disable=SC2086
+    nohup wlsunset $(cat "$state") >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+    rm -f "$state"
+    echo "color restored (previous night-light relaunched)"
+  else
+    echo "color cleared (nothing to restore)"
+  fi
+}
+
+cmd_profile() { # profile <gaming|code|video|read> — brightness (ddcutil) + temp (wlsunset)
+  case "${1:?usage: luxctl profile <gaming|code|video|read>}" in
+    gaming|jugar) v=90; t=6500 ;; code|programar) v=65; t=5500 ;;
+    video|cine) v=45; t=4500 ;; read|leer) v=35; t=4000 ;;
+    *) die "unknown profile '$1' (gaming|code|video|read)" ;;
+  esac
+  need_ddc
+  ids=$(ddcutil detect --brief 2>/dev/null | grep -o '^Display [0-9]*' | grep -o '[0-9]*' || true)
+  if [ -z "$ids" ]; then echo "brightness: skipped (no DDC/CI monitors)" >&2;
+  else for id in $ids; do ddcutil --display "$id" setvcp $VCP_BRIGHTNESS "$v" >/dev/null 2>&1 && echo "display $id brightness -> $v" || echo "display $id brightness FAILED" >&2; done; fi
+  _lux_temp_set "$t"
+}
+
+cmd_temp() { # temp <1000-10000|off>
+  case "${1:?usage: luxctl temp <1000-10000|off>}" in
+    off) _lux_temp_restore ;;
+    *) [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1000 ] && [ "$1" -le 10000 ] || die "kelvin must be 1000-10000 or 'off'"; _lux_temp_set "$1" ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 luxctl — DDC/CI monitor control (works without the Lux GUI running)
@@ -100,6 +151,8 @@ luxctl — DDC/CI monitor control (works without the Lux GUI running)
   luxctl get <display> [feat]          read level (feat: brightness|contrast)
   luxctl set <display> <feat> <0-100>  set level
   luxctl preset <night|reading|day> [display]
+  luxctl profile <gaming|code|video|read>   brightness+temp (best-effort each)
+  luxctl temp <1000-10000|off>              hold color temp / restore previous
   luxctl token [--show]                show API token file
 VCP: brightness=0x10 contrast=0x12 (VESA MCCS, generic for all brands).
 EOF
@@ -109,5 +162,6 @@ case "${1:-}" in
   doctor) shift; cmd_doctor "$@" ;; detect) shift; cmd_detect "$@" ;;
   get) shift; cmd_get "$@" ;; set) shift; cmd_set "$@" ;;
   preset) shift; cmd_preset "$@" ;; token) shift; cmd_token "$@" ;;
+  profile) shift; cmd_profile "$@" ;; temp) shift; cmd_temp "$@" ;;
   *) usage ;;
 esac

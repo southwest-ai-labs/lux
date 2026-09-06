@@ -56,6 +56,17 @@ curl -s -X PUT http://127.0.0.1:19847/v1/monitors/1 \
 | 0x10 | Brightness | 0-100 |
 | 0x12 | Contrast | 0-100 |
 
+## Profiles (display + color)
+
+- `GET /v1/profiles`, `POST /v1/profiles/gaming|code|video|read`,
+  `DELETE /v1/temperature` (restore previous night-light)
+- CLI: `luxctl profile leer`, `luxctl temp 4500`, `luxctl temp off`
+- Temperature works NOW (wlsunset takeover, previous cmdline restored on
+  clear); brightness needs i2c. Report both parts from the response; never
+  claim brightness applied when `brightness.error` is set.
+- Taking over gamma kills the user's own wlsunset (first saved cmdline wins,
+  restored on clear/quit). Mention it when a profile changes their night mode.
+
 ## Rules
 
 - Brightness/contrast writes are SAFE (no confirmation needed); stay within

@@ -5,6 +5,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'src/api_server.dart';
 import 'src/app.dart';
+import 'src/color_service.dart';
 import 'src/ddc_service.dart';
 import 'src/tray_controller.dart';
 
@@ -14,18 +15,30 @@ class _WindowHandler with WindowListener {
   @override
   void onWindowClose() async {
     if (await windowManager.isPreventClose()) {
-      await windowManager.hide();
+      await _hideWindow();
     }
   }
 }
 
 Future<void> _toggleWindow() async {
   if (await windowManager.isVisible()) {
-    await windowManager.hide();
+    await _hideWindow();
   } else {
-    await windowManager.show();
-    await windowManager.focus();
+    await _showWindow();
   }
+}
+
+/// Open centered, focused and above all Hyprland windows.
+Future<void> _showWindow() async {
+  await windowManager.show();
+  await windowManager.center();
+  await windowManager.focus();
+  await windowManager.setAlwaysOnTop(true);
+}
+
+Future<void> _hideWindow() async {
+  await windowManager.setAlwaysOnTop(false);
+  await windowManager.hide();
 }
 
 Future<void> main() async {
@@ -43,9 +56,11 @@ Future<void> main() async {
   LuxTray? tray;
   tray = LuxTray(
     onToggleWindow: _toggleWindow,
+    onShowWindow: _showWindow,
     onQuit: () async {
       await tray?.dispose();
       await api?.stop();
+      await ColorService.shutdown();
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
       exit(0);
@@ -55,10 +70,11 @@ Future<void> main() async {
 
   runApp(LuxApp(
     api: api,
-    onHide: () => windowManager.hide(),
+    onHide: _hideWindow,
     onQuit: () async {
       await tray?.dispose();
       await api?.stop();
+      await ColorService.shutdown();
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
       exit(0);

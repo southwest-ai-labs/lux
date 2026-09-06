@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
+import 'color_service.dart';
 import 'ddc_service.dart';
 import 'models.dart';
 
@@ -91,7 +92,7 @@ class LuxApiServer {
       final seg = req.uri.pathSegments;
       if (seg.length >= 2 && seg[0] == 'v1' && seg[1] == 'health') {
         return _ok(req, {
-          'version': '0.1.0',
+          'version': '0.1.1',
           'ddcAvailable': await DdcService.isAvailable,
         });
       }
@@ -143,6 +144,28 @@ class LuxApiServer {
               MapEntry('$k', v == null ? 'ok' : 'error: $v')),
         });
       }
+      if (seg.length == 2 &&
+          seg[0] == 'v1' &&
+          seg[1] == 'profiles' &&
+          req.method == 'GET') {
+        return _ok(
+            req, ColorProfiles.all.map((p) => p.toJson()).toList());
+      }
+      if (seg.length == 3 &&
+          seg[0] == 'v1' &&
+          seg[1] == 'profiles' &&
+          req.method == 'POST') {
+        final result =
+            await ColorService.applyProfile(seg[2].toLowerCase());
+        return _ok(req, result);
+      }
+      if (seg.length == 2 &&
+          seg[0] == 'v1' &&
+          seg[1] == 'temperature' &&
+          req.method == 'DELETE') {
+        await ColorService.clearTemperature();
+        return _ok(req, {'restored': true});
+      }
       return _err(req, 404, 'Unknown route. See GET /v1/skill.');
     } on LuxException catch (e) {
       return _err(req, 422, e.message);
@@ -184,6 +207,9 @@ class LuxApiServer {
           'list': 'GET /v1/monitors',
           'dim': 'PUT /v1/monitors/1 {"brightness": 20}',
           'night': 'POST /v1/presets/night',
+          'profiles': 'GET /v1/profiles',
+          'gaming': 'POST /v1/profiles/gaming',
+          'restore_color': 'DELETE /v1/temperature',
         },
         'vcp': {'brightness': '0x10 (0-100)', 'contrast': '0x12 (0-100)'},
         'cli_fallback':
