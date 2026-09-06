@@ -176,7 +176,9 @@ class _HomePageState extends State<HomePage> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF1A1410), Color(0xFF0D0B09)],
+                // Translucent: the real desktop shows through softly
+                // (the runner now provides a true RGBA surface).
+                colors: [Color(0xB31A1410), Color(0xB30D0B09)],
               ),
             ),
           ),

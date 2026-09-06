@@ -48,12 +48,26 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+
+  // Transparent background for the glass UI (Hyprland/Mac-style).
+  // window_manager's setBackgroundColor only tints GTK CSS; the Flutter
+  // surface itself defaults to opaque black. Real alpha needs:
+  // RGBA visual + app-paintable window + transparent FlView background.
+  GdkScreen* rgba_screen = gtk_window_get_screen(window);
+  GdkVisual* rgba_visual = gdk_screen_get_rgba_visual(rgba_screen);
+  if (rgba_visual != nullptr) {
+    gtk_widget_set_visual(GTK_WIDGET(window), rgba_visual);
+  }
+  gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
+
   gtk_widget_show(GTK_WIDGET(window));
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
+  const GdkRGBA kTransparent = {0.0, 0.0, 0.0, 0.0};
+  fl_view_set_background_color(view, &kTransparent);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));
 
