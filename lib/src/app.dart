@@ -1,9 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import 'api_server.dart';
 import 'color_service.dart';
 import 'ddc_service.dart';
 import 'glass_card.dart';
@@ -12,11 +10,10 @@ import 'profiles_section.dart';
 import 'tones_section.dart';
 
 class LuxApp extends StatelessWidget {
-  final LuxApiServer? api;
   final Future<void> Function() onHide;
   final Future<void> Function() onQuit;
 
-  const LuxApp({super.key, this.api, required this.onHide, required this.onQuit});
+  const LuxApp({super.key, required this.onHide, required this.onQuit});
 
   @override
   Widget build(BuildContext context) {
@@ -43,17 +40,16 @@ class LuxApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: HomePage(api: api, onHide: onHide, onQuit: onQuit),
+      home: HomePage(onHide: onHide, onQuit: onQuit),
     );
   }
 }
 
 class HomePage extends StatefulWidget {
-  final LuxApiServer? api;
   final Future<void> Function() onHide;
   final Future<void> Function() onQuit;
 
-  const HomePage({super.key, this.api, required this.onHide, required this.onQuit});
+  const HomePage({super.key, required this.onHide, required this.onQuit});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -275,8 +271,6 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
                 const SizedBox(height: 8),
-                _ApiCard(api: widget.api),
-                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.close),
                   label: const Text('Quit Lux'),
@@ -488,40 +482,6 @@ class _ErrorCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ApiCard extends StatelessWidget {
-  final LuxApiServer? api;
-  const _ApiCard({this.api});
-
-  @override
-  Widget build(BuildContext context) {
-    final a = api;
-    return GlassCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Agent API', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 4),
-            SelectableText(a == null
-                ? 'Disabled (port busy — another instance owns it).'
-                : 'Base: http://127.0.0.1:${a.port}/v1\nToken file: ${a.tokenPath}'),
-            if (a != null)
-              TextButton.icon(
-                icon: const Icon(Icons.copy, size: 16),
-                label: const Text('Copy dim-command'),
-                onPressed: () => Clipboard.setData(ClipboardData(
-                  text:
-                      'curl -s -X PUT http://127.0.0.1:${a.port}/v1/monitors/1 '
-                      '-H "Authorization: Bearer \$LUX_TOKEN" '
-                      '-H "Content-Type: application/json" '
-                      '-d \'{"brightness": 20}\'',
-                )),
-              ),
-          ],
-        ),
     );
   }
 }

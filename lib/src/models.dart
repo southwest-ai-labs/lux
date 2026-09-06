@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 /// A physical monitor discovered via DDC/CI.
 class MonitorInfo {
   final int id;
@@ -68,11 +66,6 @@ class LuxPresets {
   /// [contains] first. (Dart forbids static `operator []`, hence the method.)
   static int valueOf(String name) => values[name.toLowerCase()]!;
 }
-
-/// Minimal JSON helpers shared by the API server.
-String jsonOk(Object data) => jsonEncode({'ok': true, 'data': data});
-String jsonErr(String message, [int? code]) =>
-    jsonEncode({'ok': false, 'error': message, if (code != null) 'code': code});
 
 /// A display profile: hardware backlight + software color temperature.
 ///

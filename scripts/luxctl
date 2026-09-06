@@ -87,11 +87,6 @@ cmd_preset() { # preset <night|reading|day> [display]
   fi
 }
 
-cmd_token() {
-  f="${XDG_CONFIG_HOME:-$HOME/.config}/lux/token"
-  [ -f "$f" ] && { echo "token file: $f"; [ "${1:-}" = "--show" ] && cat "$f"; } || echo "no token yet (start the Lux app once)"
-}
-
 cmd_tone() { # tone <srgb|frio75|frio93> [display] — HW preset, allowlist only
   case "${1:?usage: luxctl tone <srgb|frio75|frio93> [display]}" in
     srgb|6500) v=5 ;; frio75|7500) v=6 ;; frio93|9300) v=8 ;;
@@ -167,7 +162,6 @@ luxctl — DDC/CI monitor control (works without the Lux GUI running)
   luxctl temp <1000-10000|off>              hold color temp / restore previous
   luxctl tone <srgb|frio75|frio93> [display] HW color preset 6500/7500/9300K
   luxctl gains <display> [r g b]            read RGB gains / set via User1
-  luxctl token [--show]                show API token file
 VCP: brightness=0x10 contrast=0x12 (VESA MCCS, generic for all brands).
 EOF
 }
@@ -175,7 +169,7 @@ EOF
 case "${1:-}" in
   doctor) shift; cmd_doctor "$@" ;; detect) shift; cmd_detect "$@" ;;
   get) shift; cmd_get "$@" ;; set) shift; cmd_set "$@" ;;
-  preset) shift; cmd_preset "$@" ;; token) shift; cmd_token "$@" ;;
+  preset) shift; cmd_preset "$@" ;;
   profile) shift; cmd_profile "$@" ;; temp) shift; cmd_temp "$@" ;;
   tone) shift; cmd_tone "$@" ;; gains) shift; cmd_gains "$@" ;;
   *) usage ;;

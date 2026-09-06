@@ -1,80 +1,64 @@
 # Lux — DDC/CI monitor brightness for Linux
 
-Flutter Linux app that lives in the system tray and controls REAL panel
-backlight via DDC/CI (VESA MCCS over I2C), plus a loopback HTTP API + CLI so
-LLM agents can drive it through the `lux-control` skill.
+Flutter Linux app in the system tray. Controls REAL panel backlight via
+DDC/CI (VESA MCCS over I2C) — unlike night-light filters, which only shift
+colors and never lower the backlight.
 
 ## Why this exists
 
-Night-light / gamma filters (Hyprsunset, Gammastep, GNOME Night Light) only
-shift colors — they never lower the backlight. If the screen still blinds you
-at night, you need hardware brightness: VCP `0x10` over DDC/CI. That works on
-practically every external monitor (DP/HDMI/DVI/VGA) from every brand,
-including the AOC 24G42HE this was built for.
+Night-light / gamma filters only shift colors. If the screen still blinds
+you at night, you need hardware brightness: VCP `0x10` over DDC/CI. Works
+on practically every external monitor (DP/HDMI) from every brand.
 
-## Approach (generic, not brand-specific)
+## Approach (generic, verified on AOC 24G42HE)
 
-- Transport: DDC/CI over the display cable's I2C bus (`ddcutil` CLI).
-- Controls: VCP `0x10` brightness + `0x12` contrast (VESA MCCS standard).
-- Discovery: `ddcutil detect` → per-display `--display N getvcp/setvcp`.
-- Graceful degradation: panels that don't report a level show `null` but
-  still accept writes; panels without DDC/CI report a clear error telling
-  the user to enable DDC/CI in the monitor OSD.
-- Presets: Night 15% / Reading 35% / Day 80% (tray menu, window, API, CLI).
+- Transport: DDC/CI over the display cable (`ddcutil` CLI).
+- Brightness `0x10` + contrast `0x12` (VESA MCCS standard).
+- Cool tones in hardware: presets `0x14` = 6500/7500/9300K + User1,
+  fine-tuned with RGB gains `0x16/0x18/0x1A` (gains need User1 first).
+  ONLY these preset values are ever sent (capabilities allowlist).
+- Warm tones (<6500K, impossible in this panel's hardware) via hyprshade
+  screen shaders (`~/.config/hypr/shaders/lux-*.glsl`).
+- This machine's wlr gamma path is broken ("gamma control of output DP-2
+  failed"), so wlsunset/gammastep cannot work here — shaders bypass it.
+- Profiles: Jugar (vibrance) / Programar 5500K / Videos 4500K / Leer 4000K.
 
-## NixOS setup (required once)
+## NixOS setup (required once, permanent)
 
 ```nix
 hardware.i2c.enable = true;                       # creates /dev/i2c-*, i2c group
 users.users.belal.extraGroups = [ "i2c" ];        # permission to talk to panels
-environment.systemPackages = with pkgs; [
-  ddcutil
-  libayatana-appindicator   # tray icon runtime (verify name: nix search nixpkgs libayatana-appindicator)
-];
+environment.systemPackages = with pkgs; [ ddcutil ];
 ```
 
 Then `sudo nixos-rebuild switch --flake /etc/nixos#swal` and **relogin**.
-Verify with: `scripts/luxctl doctor`.
+Verify with: `luxctl doctor`.
 
-Build deps for the Flutter app (NixOS workaround, see `flutter-development`
-skill): flutter, cmake, ninja, pkg-config, gtk3 dev, ayatana-appindicator dev.
+## Install / build (ephemeral shell, no system change)
 
 ```bash
-nix-shell -p flutter cmake ninja pkg-config gtk3.dev libayatana-appindicator \
-  --run "DESTDIR=/tmp/lux-build flutter build linux --release"
-# binary: /tmp/lux-build/var/empty/local/lux
+nix-shell -p flutter cmake ninja pkg-config gtk3.dev glib.dev pango.dev \
+  atk.dev gdk-pixbuf.dev cairo.dev libayatana-appindicator \
+  --run "cd ~/proyectosSWAL/apps/lux && DESTDIR=/tmp/lux-build flutter build linux --release"
+cp -r /tmp/lux-build/.../bundle/. ~/.local/share/lux/
 ```
 
-Autostart (Hyprland): `exec-once = /path/to/lux`
-Desktop entry: see `assets/lux.desktop`.
+Autostart (Hyprland): `exec-once = lux`
 
 ## Layout
 
 ```
-lib/main.dart            entry: window + tray + API wiring
+lib/main.dart            entry: window + tray wiring
 lib/src/ddc_service.dart ONLY place that speaks ddcutil (VCP codes)
-lib/src/api_server.dart  loopback HTTP API :19847 (token in ~/.config/lux/token)
-lib/src/tray_controller.dart  StatusNotifier tray (Hyprland/Waybar compatible)
-lib/src/app.dart         settings window (sliders, presets, API card)
-lib/src/models.dart      MonitorInfo, LuxException, LuxPresets
-scripts/luxctl           headless CLI (agents use it when GUI is closed)
-.skills/lux-control/     agent skill (HTTP + CLI contract)
-test/ddc_parse_test.dart parser unit tests (no hardware needed)
+lib/src/color_service.dart hyprshade profiles (shaders)
+lib/src/tray_controller.dart StatusNotifier tray (Hyprland/Waybar)
+lib/src/app.dart         glass settings window (sliders, profiles, tones)
+lib/src/glass_card.dart  frosted-glass surface widget
+lib/src/models.dart      MonitorInfo, LuxException, profiles, HW tones
+scripts/luxctl           personal CLI (doctor, detect, set, profiles, tones)
+test/                    parser + table unit tests (no hardware needed)
 ```
-
-## Agent access
-
-- App running: `GET/PUT http://127.0.0.1:19847/v1/...` (`GET /v1/skill` self-docs).
-- App closed: `scripts/luxctl ...` (same VCP codes, same presets).
-- Full contract: `.skills/lux-control/SKILL.md`.
 
 ## Status
 
-v0.1.0 — INSTALLED 2026-09-06 (`~/.local/bin/lux`, `~/.local/bin/luxctl`,
-`~/.local/share/applications/lux.desktop`). Smoke-tested: window maps in
-Hyprland, API enforces token, errors guide to the NixOS i2c fix.
-Hardware dimming pending: `hardware.i2c.enable = true` + `i2c` group.
-v0.2.0 — color profiles (Jugar/Programar/Videos/Leer) via hyprshade shaders
-(proven with captured frames). wlsunset abandoned: gamma broken on DP-2.
-Hardware brightness joins automatically once i2c is enabled.
-Next: scheduler (auto-night).
+See `features.json`. v0.4.0: agent API removed (simpler app, personal use).

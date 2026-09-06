@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'src/api_server.dart';
 import 'src/app.dart';
 import 'src/color_service.dart';
 import 'src/ddc_service.dart';
@@ -56,16 +55,12 @@ Future<void> main() async {
   await windowManager.setSize(const Size(560, 700));
   windowManager.addListener(_WindowHandler());
 
-  // Local agent API (loopback only). Null when another instance owns it.
-  final api = await LuxApiServer.tryStart();
-
   LuxTray? tray;
   tray = LuxTray(
     onToggleWindow: _toggleWindow,
     onShowWindow: _showWindow,
     onQuit: () async {
       await tray?.dispose();
-      await api?.stop();
       await ColorService.shutdown();
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
@@ -75,11 +70,9 @@ Future<void> main() async {
   await tray.initSafe();
 
   runApp(LuxApp(
-    api: api,
     onHide: _hideWindow,
     onQuit: () async {
       await tray?.dispose();
-      await api?.stop();
       await ColorService.shutdown();
       await windowManager.setPreventClose(false);
       await windowManager.destroy();
