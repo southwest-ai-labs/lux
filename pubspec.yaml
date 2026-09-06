@@ -7,9 +7,9 @@ environment:
   sdk: ^3.8.0
 
 dependencies:
+  dbus: ^0.7.15
   flutter:
     sdk: flutter
-  tray_manager: ^0.5.3
   window_manager: ^0.5.2
 
 dev_dependencies:

@@ -1,5 +1,12 @@
 # Lux ROADMAP — control total del monitor (AOC 24G42HE + genéricos DDC/CI)
 
+> 2026-09-06 DECISIÓN (orden permanente: default razonable + seguir):
+> el menú tray_manager exporta layout dbusmenu VACÍO (GetLayout=root sin
+> hijos, verificado por D-Bus) y en Linux ni siquiera emite clics a Dart.
+> Supuesto: el host (Waybar) renderiza bien menús ajenos (nm-applet).
+> Acción: bandeja D-Bus propia (`dbus`, solo-Linux) con layout real +
+> Activate=clic abre ventana. tray_manager eliminado.
+
 > Principio: solo se expone lo verificado en vivo contra hardware.
 > Códigos nuevos entran por `capabilities` + round-trip, nunca inventados.
 
