@@ -92,7 +92,7 @@ class LuxApiServer {
       final seg = req.uri.pathSegments;
       if (seg.length >= 2 && seg[0] == 'v1' && seg[1] == 'health') {
         return _ok(req, {
-          'version': '0.2.0',
+          'version': '0.3.0',
           'ddcAvailable': await DdcService.isAvailable,
         });
       }

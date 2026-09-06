@@ -45,6 +45,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
+  // Floating glass panel: no system frame, transparent canvas so the
+  // BackdropFilter samples the real desktop (Hyprland layerrule blur
+  // enhances it further). Move with Super+drag.
+  await windowManager.setAsFrameless();
+  await windowManager.setBackgroundColor(Colors.transparent);
+
   await windowManager.setPreventClose(true);
   await windowManager.setTitle('Lux — Monitor Brightness');
   await windowManager.setSize(const Size(560, 700));

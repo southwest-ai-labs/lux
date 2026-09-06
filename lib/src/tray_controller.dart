@@ -27,7 +27,13 @@ class LuxTray with TrayListener {
   Future<void> initSafe() async {
     try {
       await trayManager.setIcon('assets/tray_icon.png');
-      await trayManager.setToolTip('Lux — monitor brightness');
+      // setToolTip is unsupported on Linux (throws MissingPluginException)
+      // and must never abort the rest of tray setup.
+      try {
+        await trayManager.setToolTip('Lux — monitor brightness');
+      } catch (e) {
+        debugPrint('lux: tray tooltip unsupported: $e');
+      }
       await refreshMenu();
       trayManager.addListener(this);
       _ready = true;

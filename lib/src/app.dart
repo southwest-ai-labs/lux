@@ -1,9 +1,12 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api_server.dart';
 import 'color_service.dart';
 import 'ddc_service.dart';
+import 'glass_card.dart';
 import 'models.dart';
 import 'profiles_section.dart';
 import 'tones_section.dart';
@@ -24,6 +27,20 @@ class LuxApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.amber,
           brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: Colors.transparent,
+        cardTheme: const CardThemeData(
+          color: Color(0x141C1C22),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            side: BorderSide(color: Color(0x38FFFFFF)),
+          ),
+          elevation: 8,
+          margin: EdgeInsets.symmetric(vertical: 6),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
         ),
       ),
       home: HomePage(api: api, onHide: onHide, onQuit: onQuit),
@@ -152,7 +169,53 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    // Frosted-glass over an internal aurora backdrop: the Linux embedder
+    // surface is opaque (window_manager only tints GTK CSS), so cards blur
+    // this painted backdrop instead of the desktop. Bounded, cheap, real.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF1A1410), Color(0xFF0D0B09)],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: -80,
+          right: -60,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.amber.withValues(alpha: 0.22),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -100,
+          left: -70,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 70, sigmaY: 70),
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.teal.withValues(alpha: 0.18),
+              ),
+            ),
+          ),
+        ),
+        Scaffold(
       appBar: AppBar(
         title: const Text('Lux — Monitor brightness'),
         actions: [
@@ -187,10 +250,9 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 8),
                 if (_monitors != null && _monitors!.isNotEmpty)
-                  Card(
-                    margin: const EdgeInsets.symmetric(vertical: 6),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: GlassCard(
                       child: TonesSection(
                         monitorId: _monitors!.first.id,
                         busy: _applyingPreset,
@@ -222,6 +284,8 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+        ),
+      ],
     );
   }
 }
@@ -315,10 +379,9 @@ class _MonitorCardState extends State<_MonitorCard> {
   @override
   Widget build(BuildContext context) {
     final m = widget.monitor;
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: GlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -436,10 +499,7 @@ class _ApiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final a = api;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+    return GlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -462,7 +522,6 @@ class _ApiCard extends StatelessWidget {
               ),
           ],
         ),
-      ),
     );
   }
 }
