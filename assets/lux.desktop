@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Lux
+Comment=Monitor brightness control (DDC/CI)
+Exec=lux
+Icon=lux
+Terminal=false
+Type=Application
+Categories=Utility;Settings;
+Keywords=brightness;monitor;ddc;backlight;
+StartupWMClass=lux

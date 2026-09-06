@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# luxctl — CLI for Lux monitor control (DDC/CI via ddcutil).
+# Works headless: agents and scripts can use this even when the Flutter app
+# (and its HTTP API) is closed. Same VCP codes as lib/src/ddc_service.dart.
+set -euo pipefail
+
+VCP_BRIGHTNESS=10   # 0x10, generic on every MCCS monitor
+VCP_CONTRAST=12     # 0x12
+PRESET_NIGHT=15
+PRESET_READING=35
+PRESET_DAY=80
+
+die() { echo "luxctl: $*" >&2; exit 1; }
+need_ddc() { command -v ddcutil >/dev/null || die "ddcutil not in PATH (NixOS: pkgs.ddcutil)."; }
+
+check_i2c_hint() {
+  if ! ls /dev/i2c-* >/dev/null 2>&1; then
+    echo "hint: no /dev/i2c-* devices. NixOS: hardware.i2c.enable = true + user in group i2c, rebuild, relogin." >&2
+  fi
+}
+
+cmd_doctor() {
+  echo "== luxctl doctor =="
+  command -v ddcutil >/dev/null && echo "ddcutil: $(ddcutil --version 2>/dev/null | head -n1)" || echo "ddcutil: MISSING"
+  if ls /dev/i2c-* >/dev/null 2>&1; then echo "i2c-dev: OK ($(ls /dev/i2c-* 2>/dev/null | tr '\n' ' '))"; else echo "i2c-dev: MISSING (modprobe i2c-dev / hardware.i2c.enable)"; fi
+  if [ -r /dev/i2c-0 ] 2>/dev/null || groups | grep -qw i2c || [ "$(id -u)" = 0 ]; then echo "permissions: likely OK"; else echo "permissions: user NOT in i2c group (run: groups)"; fi
+  need_ddc; check_i2c_hint
+  ddcutil detect --brief 2>&1 | head -n 20 || true
+}
+
+cmd_detect() {
+  need_ddc; check_i2c_hint
+  if [ "${1:-}" = "--json" ]; then
+    echo '{"monitors":['
+    first=1
+    while IFS= read -r line; do
+      case "$line" in
+        Display*) id=$(echo "$line" | grep -o '[0-9]*'); [ $first = 0 ] && echo ','; first=0; printf '{"id":%s' "$id" ;;
+        *I2C\ bus:*) printf ',"i2c_bus":"%s"' "$(echo "$line" | awk -F: '{print $NF}' | xargs)" ;;
+        *DRM\ connector:*) printf ',"drm":"%s"' "$(echo "$line" | awk '{print $NF}')" ;;
+        *Monitor:*|*Model:*) printf ',"model":"%s"}' "$(echo "$line" | cut -d: -f2- | xargs | cut -c1-60)" ;;
+      esac
+    done < <(ddcutil detect --brief 2>/dev/null || true)
+    echo ']}'
+  else
+    ddcutil detect --brief 2>&1 || { check_i2c_hint; exit 1; }
+  fi
+}
+
+resolve_vcp() {
+  case "${1,,}" in
+    brightness|10|0x10) echo "$VCP_BRIGHTNESS" ;;
+    contrast|12|0x12) echo "$VCP_CONTRAST" ;;
+    *) die "unknown feature '$1' (use brightness|contrast)" ;;
+  esac
+}
+
+cmd_get() { # get <display> [brightness|contrast]
+  need_ddc
+  id="${1:?usage: luxctl get <display> [brightness|contrast]}"
+  feat=$(resolve_vcp "${2:-brightness}")
+  ddcutil --brief --display "$id" getvcp "$feat" 2>&1 || { check_i2c_hint; exit 1; }
+}
+
+cmd_set() { # set <display> <brightness|contrast> <0-100>
+  need_ddc
+  id="${1:?usage: luxctl set <display> <brightness|contrast> <0-100>}"
+  feat=$(resolve_vcp "${2:?missing feature}")
+  val="${3:?missing value}"
+  [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -ge 0 ] && [ "$val" -le 100 ] || die "value must be 0-100"
+  ddcutil --display "$id" setvcp "$feat" "$val" 2>&1 || { check_i2c_hint; exit 1; }
+  echo "display $id: feature $feat -> $val"
+}
+
+cmd_preset() { # preset <night|reading|day> [display]
+  need_ddc
+  case "${1:?usage: luxctl preset <night|reading|day> [display]}" in
+    night) v=$PRESET_NIGHT ;; reading) v=$PRESET_READING ;; day) v=$PRESET_DAY ;;
+    *) die "unknown preset '$1'" ;;
+  esac
+  if [ -n "${2:-}" ]; then
+    ddcutil --display "$2" setvcp $VCP_BRIGHTNESS "$v" && echo "display $2 -> $v"
+  else
+    ids=$(ddcutil detect --brief 2>/dev/null | grep -o '^Display [0-9]*' | grep -o '[0-9]*' || true)
+    [ -z "$ids" ] && { check_i2c_hint; die "no displays found"; }
+    for id in $ids; do ddcutil --display "$id" setvcp $VCP_BRIGHTNESS "$v" && echo "display $id -> $v" || echo "display $id FAILED" >&2; done
+  fi
+}
+
+cmd_token() {
+  f="${XDG_CONFIG_HOME:-$HOME/.config}/lux/token"
+  [ -f "$f" ] && { echo "token file: $f"; [ "${1:-}" = "--show" ] && cat "$f"; } || echo "no token yet (start the Lux app once)"
+}
+
+usage() {
+  cat <<'EOF'
+luxctl — DDC/CI monitor control (works without the Lux GUI running)
+  luxctl doctor                        checks: ddcutil, i2c-dev, perms, detect
+  luxctl detect [--json]               list DDC/CI monitors
+  luxctl get <display> [feat]          read level (feat: brightness|contrast)
+  luxctl set <display> <feat> <0-100>  set level
+  luxctl preset <night|reading|day> [display]
+  luxctl token [--show]                show API token file
+VCP: brightness=0x10 contrast=0x12 (VESA MCCS, generic for all brands).
+EOF
+}
+
+case "${1:-}" in
+  doctor) shift; cmd_doctor "$@" ;; detect) shift; cmd_detect "$@" ;;
+  get) shift; cmd_get "$@" ;; set) shift; cmd_set "$@" ;;
+  preset) shift; cmd_preset "$@" ;; token) shift; cmd_token "$@" ;;
+  *) usage ;;
+esac
