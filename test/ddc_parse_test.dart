@@ -75,4 +75,28 @@ void main() {
       expect(LuxPresets.contains('supernova'), isFalse);
     });
   });
+
+  group('extra controls (verified live on AOC)', () {
+    test('input allowlist = capabilities values only', () {
+      expect(DdcService.inputSourcesAllowed, {0x0F, 0x11});
+    });
+
+    test('input rejects anything else (signal-loss guard)', () async {
+      for (final bad in [0x01, 0x03, 0x04, 0x10, 0x12, 0x60, 99]) {
+        await expectLater(
+          DdcService.setInputSource(1, bad),
+          throwsA(isA<LuxException>()),
+        );
+      }
+    });
+
+    test('parse single-NC brief', () {
+      expect(DdcService.parseSingleNcBrief('VCP 60 SNC x0f', 0x60), 0x0F);
+      expect(DdcService.parseSingleNcBrief('VCP D6 SNC x01', 0xD6), 0x01);
+      expect(
+        () => DdcService.parseSingleNcBrief('garbage', 0x60),
+        throwsA(isA<LuxException>()),
+      );
+    });
+  });
 }

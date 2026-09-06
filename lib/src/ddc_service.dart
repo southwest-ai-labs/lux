@@ -193,6 +193,61 @@ class DdcService {
   static String _hexNoPrefix(int code) =>
       code.toRadixString(16).toUpperCase().padLeft(2, '0');
 
+  /// Input source (VCP 0x60). ONLY values from `capabilities`
+  /// (this AOC: 0x0F DP-1, 0x11 HDMI-1). Anything else risks signal loss.
+  static const inputSourcesAllowed = {0x0F, 0x11};
+
+  static Future<void> setInputSource(int id, int value) async {
+    if (!inputSourcesAllowed.contains(value)) {
+      throw LuxException(
+        'Input ${Vcp.hex(value)} not offered by this panel. '
+        'Allowed: ${inputSourcesAllowed.map(Vcp.hex).join(', ')}.',
+      );
+    }
+    await _run(
+        ['--display', '$id', 'setvcp', _hexNoPrefix(0x60), '$value']);
+  }
+
+  /// Parse single-NC brief read, e.g. "VCP 60 SNC x0f".
+  static int parseSingleNcBrief(String out, int feature) {
+    final m = RegExp(r'x([0-9a-fA-F]+)\s*$').firstMatch(out.trim());
+    if (m == null) {
+      throw LuxException(
+          'Could not read ${Vcp.hex(feature)}. Raw: ${out.trim()}');
+    }
+    return int.parse(m.group(1)!, radix: 16);
+  }
+
+  static Future<int> getInputSource(int id) async {
+    final out = await _run(
+        ['--brief', '--display', '$id', 'getvcp', _hexNoPrefix(0x60)]);
+    return parseSingleNcBrief(out, 0x60);
+  }
+
+  /// Speaker volume (VCP 0x62, 0-100 continuous). Round-trip verified.
+  static Future<int> getVolume(int id) async =>
+      (await getLevel(id, 0x62)).current;
+
+  static Future<void> setVolume(int id, int value) =>
+      _setLevel(id, 0x62, value);
+
+  /// Power mode (VCP 0xD6): 1 = on, 4 = off. Verified off->on wakes the
+  /// panel over DDC. Values 2/3 (standby/suspend) NOT exposed: wake
+  /// behavior is panel-specific and untested here.
+  static const powerModesAllowed = {0x01, 0x04};
+
+  static Future<void> setPower(int id, bool on) async {
+    final value = on ? 0x01 : 0x04;
+    await _run(
+        ['--display', '$id', 'setvcp', _hexNoPrefix(0xD6), '$value']);
+  }
+
+  static Future<int> getPower(int id) async {
+    final out = await _run(
+        ['--brief', '--display', '$id', 'getvcp', _hexNoPrefix(0xD6)]);
+    return parseSingleNcBrief(out, 0xD6);
+  }
+
   /// Hardware color presets (VCP 0x14). ONLY values reported by
   /// `capabilities` are accepted — never invent codes (0x60 input source
   /// and 0x04/0x05/0x08 resets are rejected even if passed).

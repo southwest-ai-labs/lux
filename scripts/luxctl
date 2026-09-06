@@ -150,6 +150,83 @@ cmd_temp() { # temp <1000-10000|off> — nearest lux shader; >=6000 = off
   esac
 }
 
+cmd_input() { # input <dp|hdmi> [display] — allowlist from capabilities
+  case "${1:?usage: luxctl input <dp|hdmi> [display]}" in
+    dp) v=15 ;; hdmi) v=17 ;;
+    *) die "unknown input '$1' (dp|hdmi)" ;;
+  esac
+  need_ddc
+  if [ -n "${2:-}" ]; then
+    ddcutil --display "$2" setvcp 60 "$v" && echo "display $2 input -> $v"
+  else
+    ids=$(ddcutil detect --brief 2>/dev/null | grep -o '^Display [0-9]*' | grep -o '[0-9]*' || true)
+    [ -z "$ids" ] && { check_i2c_hint; die "no displays found"; }
+    for id in $ids; do ddcutil --display "$id" setvcp 60 "$v" && echo "display $id input -> $v" || echo "display $id FAILED" >&2; done
+  fi
+}
+
+cmd_volume() { # volume <display> [0-100]
+  need_ddc
+  id="${1:?usage: luxctl volume <display> [0-100]}"
+  if [ -z "${2:-}" ]; then
+    ddcutil --brief --display "$id" getvcp 62 2>&1 || { check_i2c_hint; exit 1; }
+  else
+    [[ "$2" =~ ^[0-9]+$ ]] && [ "$2" -ge 0 ] && [ "$2" -le 100 ] || die "volume must be 0-100"
+    ddcutil --display "$id" setvcp 62 "$2" && echo "display $id volume -> $2"
+  fi
+}
+
+cmd_power() { # power <display> <on|off> — DDC 0xD6 (1/4 only, wake verified)
+  need_ddc
+  id="${1:?usage: luxctl power <display> <on|off>}"
+  case "${2:?usage: luxctl power <display> <on|off>}" in
+    on) v=1 ;; off) v=4 ;;
+    *) die "use on|off (standby/suspend not exposed: wake untested)" ;;
+  esac
+  ddcutil --display "$id" setvcp D6 "$v" && echo "display $id power -> $v"
+}
+
+cmd_refresh() { # refresh <60|120|144|200> — GPU mode via hyprctl (Hyprland)
+  case "${1:?usage: luxctl refresh <60|120|144|200>}" in
+    60|120|144|200) r="$1" ;;
+    *) die "rate must be one of 60|120|144|200" ;;
+  esac
+  command -v hyprctl >/dev/null || die "hyprctl not found (Hyprland only)"
+  out=$(hyprctl monitors 2>/dev/null | grep -m1 -oP '^Monitor \K\S+' || true)
+  [ -z "$out" ] && die "no Hyprland monitor found"
+  # NOTE: keyword replaces the whole monitor line: keep res+pos+scale.
+  hyprctl keyword monitor "$out,1920x1080@${r},0x0,1" >/dev/null && echo "$out -> ${r}Hz (flicker normal)" || die "hyprctl rejected the mode"
+  sleep 1
+  hyprctl monitors 2>/dev/null | grep -m1 -o '[0-9]*x[0-9]*@[0-9.]*' || true
+}
+
+cmd_dpms() { # dpms <off|on> [output] — compositor sleep (any key wakes)
+  case "${1:?usage: luxctl dpms <off|on> [output]}" in
+    off|on) st="$1" ;;
+    *) die "use off|on" ;;
+  esac
+  command -v hyprctl >/dev/null || die "hyprctl not found (Hyprland only)"
+  hyprctl dispatch dpms "$st" ${2:-} >/dev/null && echo "dpms $st ${2:-(all)}"
+}
+
+cmd_auto() { # auto — circadian profile from current hour (no daemon)
+  h=$(date +%H | sed 's/^0*//'); [ -z "$h" ] && h=0
+  # Daylight hours: brightness up, color neutral (shader off).
+  if [ "$h" -ge 9 ] && [ "$h" -lt 18 ]; then
+    need_ddc
+    ids=$(ddcutil detect --brief 2>/dev/null | grep -o '^Display [0-9]*' | grep -o '[0-9]*' || true)
+    for id in $ids; do ddcutil --display "$id" setvcp $VCP_BRIGHTNESS 85 >/dev/null 2>&1 && echo "display $id brightness -> 85"; done
+    command -v hyprshade >/dev/null && hyprshade off >/dev/null 2>&1 && echo "color -> neutral (shader off)"
+    echo "auto: hour $h -> daylight"
+    return 0
+  fi
+  if [ "$h" -ge 22 ] || [ "$h" -lt 6 ]; then p=read;
+  elif [ "$h" -lt 9 ]; then p=code;
+  else p=video; fi
+  cmd_profile "$p"
+  echo "auto: hour $h -> $p"
+}
+
 usage() {
   cat <<'EOF'
 luxctl — DDC/CI monitor control (works without the Lux GUI running)
@@ -162,6 +239,12 @@ luxctl — DDC/CI monitor control (works without the Lux GUI running)
   luxctl temp <1000-10000|off>              hold color temp / restore previous
   luxctl tone <srgb|frio75|frio93> [display] HW color preset 6500/7500/9300K
   luxctl gains <display> [r g b]            read RGB gains / set via User1
+  luxctl input <dp|hdmi> [display]          switch input (allowlist only)
+  luxctl volume <display> [0-100]           read / set speaker volume
+  luxctl power <display> <on|off>           DDC power (off wakes back on)
+  luxctl refresh <60|120|144|200>           GPU refresh rate (hyprctl)
+  luxctl dpms <off|on> [output]             panel sleep (Hyprland DPMS)
+  luxctl auto                               circadian profile from hour
 VCP: brightness=0x10 contrast=0x12 (VESA MCCS, generic for all brands).
 EOF
 }
@@ -172,5 +255,8 @@ case "${1:-}" in
   preset) shift; cmd_preset "$@" ;;
   profile) shift; cmd_profile "$@" ;; temp) shift; cmd_temp "$@" ;;
   tone) shift; cmd_tone "$@" ;; gains) shift; cmd_gains "$@" ;;
+  input) shift; cmd_input "$@" ;; volume) shift; cmd_volume "$@" ;;
+  power) shift; cmd_power "$@" ;; refresh) shift; cmd_refresh "$@" ;;
+  dpms) shift; cmd_dpms "$@" ;; auto) shift; cmd_auto "$@" ;;
   *) usage ;;
 esac
