@@ -6,6 +6,9 @@
 > Supuesto: el host (Waybar) renderiza bien menús ajenos (nm-applet).
 > Acción: bandeja D-Bus propia (`dbus`, solo-Linux) con layout real +
 > Activate=clic abre ventana. tray_manager eliminado.
+> RESULTADO: layout GetLayout 1606B con etiquetas; Event(1) oculta/muestra
+> ventana; Event(31) pone 7500K en hardware. Todo verificado por D-Bus sin
+> ratón. Falta solo confirmación visual del render en Waybar.
 
 > Principio: solo se expone lo verificado en vivo contra hardware.
 > Códigos nuevos entran por `capabilities` + round-trip, nunca inventados.
