@@ -70,6 +70,9 @@ test/ddc_parse_test.dart parser unit tests (no hardware needed)
 
 ## Status
 
-v0.1.0 — scaffold + DDC core + tray + API + skill. See `features.json`.
+v0.1.0 — INSTALLED 2026-09-06 (`~/.local/bin/lux`, `~/.local/bin/luxctl`,
+`~/.local/share/applications/lux.desktop`). Smoke-tested: window maps in
+Hyprland, API enforces token, errors guide to the NixOS i2c fix.
+Hardware dimming pending: `hardware.i2c.enable = true` + `i2c` group.
 Next: per-monitor saved profiles, scheduler (auto-night), gamma fallback
 (hyprsunset) for panels without DDC/CI.
