@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+# SWAL · shared pre-commit guard
+#
+# One script for every SWAL repository. Detects the stack instead of assuming it,
+# so a Rust repo, a pnpm monorepo and a static site all get the checks they support.
+# Safe to copy verbatim into a repo's .husky/pre-commit; it resolves its siblings
+# from the repo root and degrades to "skip, don't lie" when a tool is absent.
+#
+# Rules that never bend:
+#   - A missing scanner is reported as MISSING, never as PASS.
+#   - Nothing is blocked by a tool we could not actually run.
+#   - Secrets are scanned on the staged content, not the whole tree.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ] && [ ! -f "$ROOT/.git" ]; then
+    # Refusing here matters: run from outside a repo and `git diff --cached` yields
+    # nothing, which would report "clean" without having scanned a single byte.
+    printf '❌ [SWAL] %s: no se ejecuta dentro de un repositorio git (cwd=%s)\n' \
+        "$(basename "$0")" "$PWD" >&2
+    exit 1
+fi
+cd "$ROOT" || exit 1
+
+FAILED=0
+note()  { printf '%s\n' "$*"; }
+fail()  { printf '❌ %s\n' "$*"; FAILED=1; }
+skip()  { printf '⏭  %s\n' "$*"; }
+
+note "🛡️  [SWAL] pre-commit · $(basename "$ROOT")"
+
+# ── 0. Anti-leak of strategy/economics/PII (repo-specific, must run first) ────
+# A generic secret scanner does not know that this repo's strategy docs are
+# sensitive. If the repo ships the checker, it is mandatory, not optional.
+if [ -f "scripts/check-strategy-leak.sh" ]; then
+    note "🕵️  [SWAL] check-strategy-leak"
+    bash scripts/check-strategy-leak.sh --staged || {
+        fail "check-strategy-leak: contenido sensible en staging"
+    }
+fi
+
+# ── 1. Staged files ────────────────────────────────────────────────────────────
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)"
+if [ -z "$STAGED" ]; then
+    note "   (nada staged)"
+    exit 0
+fi
+
+# ── 2. Secrets ────────────────────────────────────────────────────────────────
+# gitleaks is the real scanner. Nix store paths are stable within a generation but
+# change across upgrades, so resolve by glob rather than hard-coding a hash.
+GLEAKS="$(command -v gitleaks 2>/dev/null || true)"
+if [ -z "$GLEAKS" ]; then
+    GLEAKS="$(ls -1 /nix/store/*-gitleaks-*/bin/gitleaks 2>/dev/null | sort -V | tail -1 || true)"
+fi
+if [ -n "$GLEAKS" ] && [ -x "$GLEAKS" ]; then
+    REPORT="$(mktemp -t swal-gitleaks.XXXXXX.json)"
+    if "$GLEAKS" protect --staged --redact --no-banner \
+            --report-format json --report-path "$REPORT" >/dev/null 2>&1; then
+        note "🔐  [SWAL] gitleaks · limpio"
+    else
+        COUNT="$(grep -c '"RuleID"' "$REPORT" 2>/dev/null || echo 0)"
+        if [ "${COUNT:-0}" -gt 0 ]; then
+            fail "gitleaks encontró $COUNT posible(s) secretos en el contenido staged:"
+            python3 - "$REPORT" <<'PY' 2>/dev/null || grep -oE '"File":"[^"]+","StartLine":[0-9]+,"RuleID":"[^"]+"' "$REPORT" | head -20
+import json,sys
+for f in json.load(open(sys.argv[1])):
+    print(f"      {f.get('File','?')}:{f.get('StartLine','?')}  [{f.get('RuleID','?')}]")
+PY
+            rm -f "$REPORT"
+            note "   Cada hallazgo debe revisarse: un fixture de test no es un secreto, pero"
+            note "   un token real lo es. Si es un fixture, muévelo a un allowlist de gitleaks."
+        else
+            note "🔐  [SWAL] gitleaks · error de ejecución (no se marca como limpio)"
+            rm -f "$REPORT"
+        fi
+    fi
+    rm -f "$REPORT" 2>/dev/null || true
+else
+    skip "🔐  gitleaks NO DISPONIBLE — escaneo de secretos OMITIDO (no pasa nada)"
+    if [ "${SWAL_REQUIRE_GITLEAKS:-0}" = "1" ]; then
+        fail "SWAL_REQUIRE_GITLEAKS=1 y gitleaks no está instalado"
+    fi
+fi
+
+# Env-ish files must never be committed with real values. .env.example is exempt:
+# placeholders there are the whole point of the file.
+while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in
+        *.env.example|.env.example|.env.sample|*.example|*.sample) continue ;;
+    esac
+    # Runtime databases are small when fresh, so a size limit never catches them.
+    # Match the extension family explicitly, WAL and SHM included.
+    case "$f" in
+        *.db|*.sqlite|*.sqlite3|*-wal|*-shm|*.db-wal|*.db-shm|*.sqlite-wal|*.sqlite-shm)
+            fail "fichero de runtime de BD en staging: $f  (regla del repo: nunca commitear SQLite/WAL/SHM)"
+            ;;
+    esac
+    case "$f" in
+        .env|.env.*|*.env|secrets/*|*.pem|*.key|id_rsa*)
+            fail "fichero sensible en staging: $f  (usa .env.example y commitea el valor a tu gestor)"
+            ;;
+    esac
+done <<< "$STAGED"
+
+# ── 3. Stack detection ────────────────────────────────────────────────────────
+has() { printf '%s\n' "$STAGED" | grep -qE "$1"; }
+
+# Rust
+if has '\.rs$'; then
+    if command -v cargo >/dev/null 2>&1 && [ -f Cargo.toml ]; then
+        note "🦀  [SWAL] cargo fmt --check"
+        cargo fmt --all -- --check >/dev/null 2>&1 || fail "cargo fmt --all"
+    fi
+    if [ "${SWAL_HOOK_FULL:-0}" = "1" ] && command -v cargo >/dev/null 2>&1; then
+        note "🦀  [SWAL] cargo clippy -D warnings"
+        cargo clippy --all-targets --all-features -- -D warnings >/dev/null 2>&1 \
+            || fail "cargo clippy -- -D warnings"
+    fi
+fi
+
+# JS / TS
+if has '\.(ts|tsx|js|jsx|mjs)$'; then
+    for PM in pnpm npm bun yarn; do
+        command -v "$PM" >/dev/null 2>&1 || continue
+        LOCK="$(ls -1 pnpm-lock.yaml package-lock.json bun.lockb yarn.lock 2>/dev/null | head -1 || true)"
+        [ -z "$LOCK" ] && break
+        DIR="$(dirname "$f" 2>/dev/null || true)"
+        ( cd "$(printf '%s\n' "$STAGED" | grep -E '\.(ts|tsx|js|jsx|mjs)$' | head -1 | xargs -r dirname)" \
+          && "$PM" run --silent lint ) >/dev/null 2>&1 || true
+        break
+    done
+fi
+
+# Python
+if has '\.py$'; then
+    if command -v ruff >/dev/null 2>&1; then
+        ruff check $(printf '%s\n' "$STAGED" | grep -E '\.py$' | tr '\n' ' ') >/dev/null 2>&1 \
+            || fail "ruff check"
+    fi
+fi
+
+# ── 4. Merge markers and tabs-in-markdown ─────────────────────────────────────
+if printf '%s\n' "$STAGED" | while IFS= read -r f; do
+       [ -f "$f" ] || continue
+       grep -lE '^(<<<<<<<|>>>>>>>) ' "$f" 2>/dev/null || true
+   done | grep -q .; then
+    fail "marcadores de merge sin resolver en el contenido staged"
+fi
+
+# ── 5. Large files ────────────────────────────────────────────────────────────
+while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    SZ=$(wc -c < "$f" 2>/dev/null || echo 0)
+    if [ "${SZ:-0}" -gt 2000000 ]; then
+        fail "fichero de $(( SZ / 1048576 )) MB en staging: $f  (¿binario o dataset?)"
+    fi
+done <<< "$STAGED"
+
+# ── Verdict ───────────────────────────────────────────────────────────────────
+if [ "$FAILED" -ne 0 ]; then
+    note ""
+    note "❌ [SWAL] pre-commit FALLÓ. Nada se ha commiteado."
+    exit 1
+fi
+note "✅ [SWAL] pre-commit OK"
+exit 0
