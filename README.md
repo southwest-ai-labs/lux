@@ -8,13 +8,17 @@ colors and never lower the backlight.
 
 ## Screenshots
 
-Rendered by the headless e2e suite (`flutter test test/e2e`), so they show the current UI.
+Lux in the Waybar tray, and its error card when ddcutil cannot be reached:
 
 <p align="center">
-  <img src="docs/screenshots/home.png" width="240" alt="Lux home screen">
-  <img src="docs/screenshots/tones.png" width="240" alt="Lux colour tones and monitor sliders">
-  <img src="docs/screenshots/error.png" width="240" alt="Lux error state when ddcutil is missing">
+  <img src="docs/screenshots/tray.png" alt="Lux icons in the Waybar tray">
+  <img src="docs/screenshots/error-live.png" width="300" alt="Lux error card: ddcutil not found">
 </p>
+
+The headless e2e suite renders the full window with a fake monitor
+(`flutter test test/e2e`): [home](docs/screenshots/home.png),
+[colour tones](docs/screenshots/tones.png) and the
+[error state](docs/screenshots/error.png).
 
 ## Why this exists
 
