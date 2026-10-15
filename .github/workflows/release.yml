@@ -120,11 +120,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           VERSION="${TAG#v}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --verify-tag --title "Lux $VERSION" \
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$REPO" --title "Lux $VERSION" \
               --notes "Lux $VERSION. Linux and Windows bundles built by the Release workflow."
           fi
-          gh release upload "$TAG" bundles/* --clobber
-          gh release view "$TAG" --json url,assets --jq '.url, (.assets[].name)'
+          gh release upload "$TAG" bundles/* --repo "$REPO" --clobber
+          gh release view "$TAG" --repo "$REPO" --json url,assets --jq '.url, (.assets[].name)'
