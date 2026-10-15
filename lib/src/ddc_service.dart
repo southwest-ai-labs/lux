@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'models.dart';
+import 'process_runner.dart';
 
 /// VESA MCCS Virtual Control Panel codes (generic — same on every brand).
 abstract final class Vcp {
@@ -28,7 +29,7 @@ class DdcService {
   static Future<String> _run(List<String> args) async {
     ProcessResult result;
     try {
-      result = await Process.run(executable, args);
+      result = await Shell.run(executable, args);
     } on ProcessException catch (e) {
       throw LuxException(
         'ddcutil not found in PATH (${e.message}). '

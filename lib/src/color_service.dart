@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'ddc_service.dart';
 import 'models.dart';
+import 'process_runner.dart';
 
 /// Software color via hyprshade screen shaders (compositor-side).
 ///
@@ -33,7 +34,7 @@ class ColorService {
 
   static Future<bool> get isAvailable async {
     try {
-      final r = await Process.run('which', [executable]);
+      final r = await Shell.run('which', [executable]);
       return r.exitCode == 0;
     } on ProcessException {
       return false;
@@ -103,7 +104,7 @@ class ColorService {
 
   static Future<String?> currentShader() async {
     try {
-      final r = await Process.run(executable, ['current']);
+      final r = await Shell.run(executable, ['current']);
       if (r.exitCode != 0) return null;
       final out = '${r.stdout}'.trim();
       return out.isEmpty ? null : out;
@@ -115,7 +116,7 @@ class ColorService {
   static Future<void> _runHyprshade(List<String> args) async {
     ProcessResult r;
     try {
-      r = await Process.run(executable, args);
+      r = await Shell.run(executable, args);
     } on ProcessException catch (e) {
       throw LuxException(
           'hyprshade not found in PATH (${e.message}). NixOS: nix profile install nixpkgs#hyprshade.');
