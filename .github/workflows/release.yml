@@ -1,7 +1,7 @@
 name: Release
 
-# Builds the Linux and Windows bundles from a version tag and attaches them to
-# the GitHub release for that tag. Re-run for an existing tag with
+# Builds the Linux bundle from a version tag and attaches it to the GitHub
+# release for that tag. Re-run for an existing tag with
 # workflow_dispatch; the tag itself is never moved.
 
 on:
@@ -68,45 +68,9 @@ jobs:
           path: lux-*-linux-x64.tar.gz
           if-no-files-found: error
 
-  windows:
-    name: Windows bundle
-    runs-on: windows-2022
-    timeout-minutes: 45
-    steps:
-      - name: Checkout tag
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build release bundle
-        run: flutter build windows --release
-
-      - name: Package
-        shell: pwsh
-        run: |
-          $tag = if ("${{ inputs.tag }}" -ne "") { "${{ inputs.tag }}" } else { "${{ github.ref_name }}" }
-          $version = $tag.TrimStart('v')
-          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "lux-$version-windows-x64.zip"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: lux-*-windows-x64.zip
-          if-no-files-found: error
-
   publish:
     name: Attach bundles to the release
-    needs: [linux, windows]
+    needs: [linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -125,7 +89,7 @@ jobs:
           VERSION="${TAG#v}"
           if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$REPO" --title "Lux $VERSION" \
-              --notes "Lux $VERSION. Linux and Windows bundles built by the Release workflow."
+              --notes "Lux $VERSION. Linux bundle built by the Release workflow."
           fi
           gh release upload "$TAG" bundles/* --repo "$REPO" --clobber
           gh release view "$TAG" --repo "$REPO" --json url,assets --jq '.url, (.assets[].name)'

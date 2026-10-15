@@ -130,24 +130,9 @@ Paste `ddcutil capabilities` output in an issue: brand, model, link,
 and which of brightness/contrast/presets/gains responded. The allowlist
 in `DdcService` grows from real reports, never from guesses.
 
-## Builds per OS
+## Platform
 
-| OS | Status | How |
-|---|---|---|
-| Linux (x64) | Built here (`~/.local/share/lux`) | nix-shell recipe in this README |
-| Windows (x64) | Built by the release workflow on `windows-2022` (`lux-*-windows-x64.zip`). The window renders, but there is no monitor backend on Windows: DDC/CI runs through `ddcutil` (Linux only), so brightness and colour controls show the "cannot reach monitors" card. The tray needs D-Bus and is Linux only. | Release workflow, or `flutter build windows --release` on Windows; runner in `windows/` |
-| macOS (.dmg) | NOT built here — needs a Mac (Xcode) | `flutter build macos --release` on a Mac; runner in `macos/` |
-
-Cross-compiling Flutter desktop from Linux is unsupported, so no honest
-.exe/.dmg can come out of this machine. Portability notes:
-
-- UI/tray/window code is already cross-platform (`tray_manager`,
-  `window_manager` support all three).
-- The DDC layer shells to `ddcutil` (Linux-only). Windows/macOS need a
-  native backend each: Windows → Physical Monitor API (like Monitorian /
-  ClickMonitorDDC); macOS → `ddcctl` for external monitors (internal
-  panels use IOKit, a different API). `DdcService` is the single seam:
-  implement per-OS runners behind it; VCP codes stay identical.
-- Color profiles use hyprshade (Hyprland-only). Other compositors/DEs
-  need their own filter path (GNOME Night Light, Windows Night light API,
-  macOS Night Shift) — same seam, same profile table.
+Lux is a Linux-only app. It needs `ddcutil` (DDC/CI over I2C), a Hyprland or
+wlroots compositor for the colour profiles (hyprshade), and a D-Bus session for
+the tray. Releases are built by the Release workflow and attached to the GitHub
+release for each tag: `lux-<version>-linux-x64.tar.gz`.
