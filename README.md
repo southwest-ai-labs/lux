@@ -135,7 +135,7 @@ in `DdcService` grows from real reports, never from guesses.
 | OS | Status | How |
 |---|---|---|
 | Linux (x64) | Built here (`~/.local/share/lux`) | nix-shell recipe in this README |
-| Windows (.exe) | NOT built here — needs a Windows machine (MSVC) | `flutter build windows --release` on Windows; runner in `windows/` |
+| Windows (x64) | Built by the release workflow on `windows-2022` (`lux-*-windows-x64.zip`). The window renders, but there is no monitor backend on Windows: DDC/CI runs through `ddcutil` (Linux only), so brightness and colour controls show the "cannot reach monitors" card. The tray needs D-Bus and is Linux only. | Release workflow, or `flutter build windows --release` on Windows; runner in `windows/` |
 | macOS (.dmg) | NOT built here — needs a Mac (Xcode) | `flutter build macos --release` on a Mac; runner in `macos/` |
 
 Cross-compiling Flutter desktop from Linux is unsupported, so no honest
