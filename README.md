@@ -6,6 +6,16 @@ Flutter Linux app in the system tray. Controls REAL panel backlight via
 DDC/CI (VESA MCCS over I2C) — unlike night-light filters, which only shift
 colors and never lower the backlight.
 
+## Screenshots
+
+Rendered by the headless e2e suite (`flutter test test/e2e`), so they show the current UI.
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="240" alt="Lux home screen">
+  <img src="docs/screenshots/tones.png" width="240" alt="Lux colour tones and monitor sliders">
+  <img src="docs/screenshots/error.png" width="240" alt="Lux error state when ddcutil is missing">
+</p>
+
 ## Why this exists
 
 Night-light / gamma filters only shift colors. If the screen still blinds
@@ -41,7 +51,7 @@ Verify with: `luxctl doctor`.
 ```bash
 nix-shell -p flutter cmake ninja pkg-config gtk3.dev glib.dev pango.dev \
   atk.dev gdk-pixbuf.dev cairo.dev libayatana-appindicator \
-  --run "cd ~/proyectosSWAL/apps/lux && DESTDIR=/tmp/lux-build flutter build linux --release"
+  --run "cd \"$HOME/proyectosSWAL/otras apps/lux\" && DESTDIR=/tmp/lux-build flutter build linux --release"
 cp -r /tmp/lux-build/.../bundle/. ~/.local/share/lux/
 ```
 
@@ -57,14 +67,17 @@ lib/src/tray_controller.dart StatusNotifier tray (Hyprland/Waybar)
 lib/src/app.dart         glass settings window (sliders, profiles, tones)
 lib/src/glass_card.dart  frosted-glass surface widget
 lib/src/models.dart      MonitorInfo, LuxException, profiles, HW tones
+lib/src/process_runner.dart Shell.run: the only seam that starts commands
 scripts/luxctl           personal CLI (doctor, detect, set, profiles, tones)
 test/                    parser + table unit tests (no hardware needed)
+test/e2e/                headless app tests with FakeShell; screenshots in docs/screenshots
 ```
 
 ## Status
 
-See `features.json`. v0.4.1: personal app (agent API removed) + real
-desktop transparency.
+See `features.json`. v0.6.0: single instance (a second launch focuses the
+running window), headless e2e suite with screenshots, latest dependencies.
+Release gate: [docs/RELEASE.md](docs/RELEASE.md).
 
 ## Monitor compatibility
 
