@@ -4,7 +4,7 @@ Welcome to the Lux repository. This is an agent guide to assist in automating CI
 
 ## Project Facts
 - **Repository:** `southwest-ai-labs/lux`
-- **Version:** Lux 0.6.0
+- **Version:** Lux 0.6.1
 - **Type:** DDC/CI monitor brightness control for Linux (tray + profiles + HW tones).
 - **Environment:** Linux-first (headless tray app). Do not execute builds for Windows, macOS, or mobile.
 - **Language:** Dart/Flutter
