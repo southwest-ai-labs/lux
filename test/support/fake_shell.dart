@@ -8,14 +8,19 @@ import 'package:lux/src/process_runner.dart';
 /// recorded, so a test can assert exactly what would have reached the panel,
 /// and in particular that opening the app only ever reads from it.
 class FakeShell {
-  FakeShell({this.ddcInstalled = true});
+  FakeShell({this.ddcInstalled = true, this.onPath = true});
 
-  /// When false, `ddcutil` is reported missing from PATH.
+  /// When false, `ddcutil` exists nowhere and every lookup fails.
   final bool ddcInstalled;
+
+  /// When false, a bare `ddcutil` lookup fails as if PATH lacked it, while an
+  /// absolute path to the binary still works (the NixOS profile case).
+  final bool onPath;
 
   final List<String> _calls = [];
 
-  /// Every command issued so far, e.g. `ddcutil --display 1 setvcp 10 15`.
+  /// Every command issued so far, by tool name, e.g.
+  /// `ddcutil --display 1 setvcp 10 15`. Absolute paths are recorded by name.
   List<String> get calls => List.unmodifiable(_calls);
 
   /// Only the commands that write to the panel or the compositor.
@@ -30,23 +35,25 @@ class FakeShell {
   void uninstall() => Shell.run = Process.run;
 
   Future<ProcessResult> _run(String executable, List<String> args) async {
-    _calls.add('$executable ${args.join(' ')}');
-    switch (executable) {
+    final bare = !executable.contains('/');
+    final tool = executable.split('/').last;
+    _calls.add('$tool ${args.join(' ')}');
+    if (tool == 'ddcutil' && (!ddcInstalled || (bare && !onPath))) {
+      throw ProcessException(tool, const [], 'No such file or directory');
+    }
+    switch (tool) {
       case 'which':
-        return ProcessResult(1, 0, '/run/current-system/sw/bin/$executable', '');
+        return ProcessResult(1, 0, '/run/current-system/sw/bin/$tool', '');
       case 'hyprshade':
         return ProcessResult(2, 0, '', '');
       case 'ddcutil':
         return _ddcutil(args);
       default:
-        return ProcessResult(3, 127, '', '$executable: not faked');
+        return ProcessResult(3, 127, '', '$tool: not faked');
     }
   }
 
   ProcessResult _ddcutil(List<String> args) {
-    if (!ddcInstalled) {
-      throw const ProcessException('ddcutil', [], 'No such file or directory');
-    }
     if (args.contains('--version')) {
       return ProcessResult(10, 0, 'ddcutil 2.2.0', '');
     }

@@ -29,7 +29,7 @@ class DdcService {
   static Future<String> _run(List<String> args) async {
     ProcessResult result;
     try {
-      result = await Shell.run(executable, args);
+      result = await Shell.runTool(executable, args);
     } on ProcessException catch (e) {
       throw LuxException(
         'ddcutil not found in PATH (${e.message}). '

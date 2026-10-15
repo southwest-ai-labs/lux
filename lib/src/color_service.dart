@@ -104,7 +104,7 @@ class ColorService {
 
   static Future<String?> currentShader() async {
     try {
-      final r = await Shell.run(executable, ['current']);
+      final r = await Shell.runTool(executable, ['current']);
       if (r.exitCode != 0) return null;
       final out = '${r.stdout}'.trim();
       return out.isEmpty ? null : out;
@@ -116,7 +116,7 @@ class ColorService {
   static Future<void> _runHyprshade(List<String> args) async {
     ProcessResult r;
     try {
-      r = await Shell.run(executable, args);
+      r = await Shell.runTool(executable, args);
     } on ProcessException catch (e) {
       throw LuxException(
           'hyprshade not found in PATH (${e.message}). NixOS: nix profile install nixpkgs#hyprshade.');
