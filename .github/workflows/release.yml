@@ -62,7 +62,7 @@ jobs:
           tar -C build/linux/x64/release/bundle -czf "lux-${VERSION}-linux-x64.tar.gz" .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux
           path: lux-*-linux-x64.tar.gz
