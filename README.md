@@ -1,5 +1,7 @@
 # Lux — DDC/CI monitor brightness for Linux
 
+[![CI](https://github.com/southwest-ai-labs/lux/actions/workflows/ci.yml/badge.svg)](https://github.com/southwest-ai-labs/lux/actions/workflows/ci.yml)
+
 > Copyright 2026 Southwest AI Labs — Apache-2.0 (see `LICENSE`).
 
 Flutter Linux app in the system tray. Controls REAL panel backlight via
@@ -129,6 +131,10 @@ Those tools speak the exact same VCP codes Lux uses.
 Paste `ddcutil capabilities` output in an issue: brand, model, link,
 and which of brightness/contrast/presets/gains responded. The allowlist
 in `DdcService` grows from real reports, never from guesses.
+
+## Security
+
+Please see [SECURITY.md](SECURITY.md) for supported versions and how to privately report vulnerabilities.
 
 ## Platform
 
