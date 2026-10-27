@@ -56,8 +56,10 @@ jobs:
         run: flutter build linux --release
 
       - name: Package
+        env:
+          TAG_IN: ${{ inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
+          TAG="${TAG_IN}"
           VERSION="${TAG#v}"
           tar -C build/linux/x64/release/bundle -czf "lux-${VERSION}-linux-x64.tar.gz" .
 
