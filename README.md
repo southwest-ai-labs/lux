@@ -81,9 +81,17 @@ test/e2e/                headless app tests with FakeShell; screenshots in docs/
 
 ## Status
 
-See `features.json`. v0.6.0: single instance (a second launch focuses the
-running window), headless e2e suite with screenshots, latest dependencies.
-Release gate: [docs/RELEASE.md](docs/RELEASE.md).
+**Current version:** 1.0.0 (Release Candidate)
+
+Lux is a stable, headless system tray application for Linux that provides:
+- Hardware backlight control via DDC/CI (brightness and contrast).
+- Hardware colour temperature presets (sRGB, 7500K, 9300K, etc.) and RGB gains.
+- Software colour profiles (warm tones via hyprshade).
+- A glassmorphism settings window.
+- A single-instance architecture (launching again focuses the existing window).
+- A personal CLI (`luxctl`) for scripting.
+
+It is tested via headless end-to-end suites. All features described above are implemented and verified.
 
 ## Monitor compatibility
 
